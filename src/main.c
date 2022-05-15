@@ -65,7 +65,7 @@ int main() {
 	Vector3 pistol_pos;
 	Model pistol_model;
 	ModelAnimation *pistol_anims;
-	float pistol_anim_frame = 1.0f;
+	float pistol_anim_frame = 0.0f;
 	unsigned int pistol_anim_count = 1;
 
 	Mesh sphere_mesh;
@@ -139,9 +139,9 @@ int main() {
 	pistol_pos.y = -0.25f;
 	pistol_pos.z = -0.21f;
 
-	pistol_model = LoadModel("res/models/weapons/pistol/pistol.glb");
+	pistol_model = LoadModel("res/models/weapons/pistol/pistol.iqm");
 	pistol_model.materials->shader = shader_lights;
-	pistol_anims = LoadModelAnimations("res/models/weapons/pistol/pistol.glb", &pistol_anim_count);
+	pistol_anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol_anim_count);
 
 	sphere_mesh = GenMeshSphere(1.0f, 32, 32);
 	sphere_model = LoadModelFromMesh(sphere_mesh);
@@ -219,9 +219,16 @@ int main() {
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && fire_timer <= 0.0f) {
 			PlaySound(sfx_pistol);
+			pistol_anim_frame = 0.0f;
 			fire_timer = 0.2f;
 		}
-		fire_timer -= time_delta * (fire_timer > 0.0f);
+
+		if(fire_timer > 0.0f) {
+			pistol_anim_frame += time_delta * 60.0f;
+			if((int)pistol_anim_frame >= pistol_anims[1].frameCount) pistol_anim_frame = 0.0f;
+			UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_anim_frame);
+			fire_timer -= time_delta;
+		}
 
 		/* updating */
 		Vector2 player_angle_delta;
