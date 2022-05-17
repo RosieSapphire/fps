@@ -8,8 +8,8 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define SCREEN_WIDTH		1920
-#define SCREEN_HEIGHT		1080
+#define SCREEN_WIDTH		1280
+#define SCREEN_HEIGHT		720
 #define SCREEN_LABEL		"Raylib Test"
 
 #define GLSL_VERSION		330
@@ -21,7 +21,7 @@
 
 #define PLAYER_RADIUS		0.2f
 #define PLAYER_HEIGHT		1.0f
-#define HEADBOB_SCALE		0.16f
+#define HEADBOB_SCALE		0.04f
 #define HEADBOB_SPEED		250.0f
 
 #define RAY_COUNT			8
@@ -63,6 +63,7 @@ int main() {
 
 	Color pistol_color;
 	Vector3 pistol_pos;
+	Vector3 pistol_recoil_dir;
 	Model pistol_model;
 	ModelAnimation *pistol_anims;
 	float pistol_anim_frame = 0.0f;
@@ -130,9 +131,9 @@ int main() {
 	room_model_empty = LoadModel("res/models/room/room-empty.obj");
 	room_model_empty.materials->shader = shader_lights;
 
-	pistol_color.r = 0x17;
-	pistol_color.g = 0x17;
-	pistol_color.b = 0x22;
+	pistol_color.r = 0x10;
+	pistol_color.g = 0x10;
+	pistol_color.b = 0x16;
 	pistol_color.a = 0xFF;
 
 	pistol_pos.x = -0.62f;
@@ -141,7 +142,9 @@ int main() {
 
 	pistol_model = LoadModel("res/models/weapons/pistol/pistol.iqm");
 	pistol_model.materials->shader = shader_lights;
+	pistol_model.materials->maps->color = pistol_color;
 	pistol_anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol_anim_count);
+	pistol_model.transform = MatrixMultiply(pistol_model.transform, MatrixRotateX(PI/2));
 
 	sphere_mesh = GenMeshSphere(1.0f, 32, 32);
 	sphere_model = LoadModelFromMesh(sphere_mesh);
@@ -221,14 +224,24 @@ int main() {
 			PlaySound(sfx_pistol);
 			pistol_anim_frame = 0.0f;
 			fire_timer = 0.2f;
+
+			pistol_recoil_dir = (Vector3) {
+				(float)GetRandomValue(-8, 8) / 256,
+				(float)GetRandomValue(8, 16) / 256,
+				(float)GetRandomValue(-8, 8) / 256,
+			};
+			printf("%f, %f, %f\n", pistol_recoil_dir.x, pistol_recoil_dir.y, pistol_recoil_dir.z);
 		}
 
 		if(fire_timer > 0.0f) {
 			pistol_anim_frame += time_delta * 60.0f;
-			if((int)pistol_anim_frame >= pistol_anims[1].frameCount) pistol_anim_frame = 0.0f;
-			UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_anim_frame);
 			fire_timer -= time_delta;
 		}
+		fire_timer = Clamp(fire_timer, 0.0f, 0.2f);
+		pistol_anim_frame =
+			Clamp(pistol_anim_frame, 0.0f, (float)pistol_anims[1].frameCount);
+
+		UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_anim_frame);
 
 		/* updating */
 		Vector2 player_angle_delta;
@@ -302,24 +315,23 @@ int main() {
 		player_raw_pos = raw_pos_push;
 		player_target_pos = target_pos_push;
 
-		player_delta = Vector3Scale(Vector3Subtract(player_raw_pos_old, player_raw_pos), time_delta * HEADBOB_SPEED);
+		player_delta = Vector3Subtract(player_raw_pos_old, player_raw_pos);
 
 		headbob_sin = sinf(time_elapsed * 16.0f * ((float)is_running * 0.75f));
 		headbob_cos = cosf(time_elapsed * 8.0f * ((float)is_running * 0.75f));
-		headbob_intensity = (fabsf(player_delta.x * 24.0f) + fabsf(player_delta.z * 24.0f)) * 0.4f;
-		headbob.x = sin_player_angle_x * headbob_cos * HEADBOB_SCALE * headbob_intensity;
-		headbob.y = headbob_sin * HEADBOB_SCALE * headbob_intensity;
-		headbob.z = -cos_player_angle_x * headbob_cos * HEADBOB_SCALE * headbob_intensity;
+		headbob_intensity = (fabsf(player_delta.x * 24.0f) + fabsf(player_delta.z * 24.0f));
+		headbob.x = sin_player_angle_x * headbob_cos;
+		headbob.y = headbob_sin;
+		headbob.z = -cos_player_angle_x * headbob_cos;
+		headbob = Vector3Scale(headbob, HEADBOB_SCALE * headbob_intensity);
 
 		player_raw_target = (Vector3){cos_player_angle_x, player_angle.y, sin_player_angle_x};
 		player_raw_target = Vector3Normalize(player_raw_target);
 		player_raw_target = Vector3Multiply(player_raw_target, (Vector3){PLAYER_RADIUS, PLAYER_RADIUS, PLAYER_RADIUS});
 		player_raw_target = Vector3Add(player_raw_target, player_raw_pos);
 		player.target = Vector3Add(player_raw_target, headbob);
+		player.target = Vector3Add(player.target, Vector3Scale(pistol_recoil_dir, fire_timer));
 		player.position = Vector3Add(player_raw_pos, headbob);
-
-		UpdateModelAnimation(pistol_model, *pistol_anims, (int)pistol_anim_frame);
-		pistol_anim_frame += time_delta;
 
 		/* 3rd-person camera controls */
 		viewport.fovy += (IsKeyDown(KEY_RIGHT_SHIFT) * time_delta * 4.0f) -
@@ -350,8 +362,9 @@ int main() {
 			BeginMode3D(cam_view_model); {
 				ClearBackground((Color){0xFF, 0xFF, 0xFF, 0x00});
 				DrawModel(pistol_model,
-					Vector3Add(pistol_pos, Vector3Scale((Vector3){0.0f, headbob_sin, headbob_cos},
-					headbob_intensity * 0.04f)), 1.0f, pistol_color);
+					Vector3Add(pistol_pos,
+					Vector3Scale((Vector3){0.0f, headbob_sin * 0.5f, -headbob_cos},
+					headbob_intensity * HEADBOB_SCALE * 0.2f)), 1.0f, pistol_color);
 			} EndMode3D();
 		} EndTextureMode();
 
@@ -373,9 +386,9 @@ int main() {
 					else
 						DrawModel(room_model_full, Vector3Zero(), 1.0f, DARKGREEN);
 
-					DrawModel(sphere_model, player_raw_pos, 0.01f, PINK); /* real position */
-					DrawSphere(player.position, 0.005f, RED); /* transformed position */
-					DrawSphere(player_target_pos, 0.02f, WHITE); /* lerp position */
+					DrawModel(sphere_model, player_raw_pos, 0.01f, PINK);
+					DrawSphere(player.position, 0.005f, RED);
+					DrawSphere(player_target_pos, 0.02f, WHITE);
 					DrawModel(pistol_model, pistol_pos, 1.0f, pistol_color);
 
 					DrawRay((Ray){player_raw_pos, (Vector3){cos_player_angle_x * 0.2f, 1.0f, sin_player_angle_x * 0.2f}},

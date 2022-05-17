@@ -1,6 +1,6 @@
 CC=gcc
 INCDIRS=-I./include/ -I/usr/include/
-LIBS=-lm -lraylib
+LIBS=-lm -lraylib -ldl -lpthread
 
 OPT_DEBUG=-O0
 CFLAGS_DEBUG=-Wall -Wextra -Werror -pedantic -g3 $(INCDIRS) $(OPT_DEBUG)
@@ -35,10 +35,10 @@ obj/%.od: src/%.c
 	@mkdir -p obj/
 	$(CC) $(CFLAGS_DEBUG) -c -o $@ $^
 
-run:
+run: release
 	./$(BINARY_RELEASE)
 
-rund:
+rund: debug
 	gdb ./$(BINARY_DEBUG) --tui
 
 go:
