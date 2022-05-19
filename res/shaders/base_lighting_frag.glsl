@@ -32,6 +32,7 @@ struct Light {
 uniform Light lights[MAX_LIGHTS];
 uniform vec4 ambient;
 uniform vec3 viewPos;
+uniform vec3 viewTar;
 
 void main()
 {
@@ -39,7 +40,7 @@ void main()
     vec4 texelColor = texture(texture0, fragTexCoord);
     vec3 lightDot = vec3(0.0);
     vec3 normal = normalize(fragNormal);
-    vec3 viewD = normalize(viewPos - fragPosition);
+    vec3 viewD = normalize(viewPos - viewTar);
     vec3 specular = vec3(0.0);
 
     // NOTE: Implement here your fragment shader code
@@ -74,4 +75,5 @@ void main()
 
     // Gamma correction
     finalColor = pow(finalColor, vec4(1.0/2.2));
+	finalColor *= (finalColor * vec4(1.5));
 }

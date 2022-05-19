@@ -65,6 +65,11 @@ int main() {
 	int ambient_color_loc;
 	float ambient_color[4];
 
+	int view_pos_loc;
+	float view_pos[3];
+	int view_tar_loc;
+	float view_tar[3];
+
 	Vector2 player_angle;
 	Camera player;
 
@@ -100,6 +105,8 @@ int main() {
 	Rectangle render_rect;
 
 	Vector3 light_pos;
+	Light light;
+
 	Vector2 mouse_pos;
 	Vector3 player_target_pos;
 	Vector3 player_raw_pos;
@@ -140,6 +147,9 @@ int main() {
 	ambient_color[3] = 0xFF;
 	SetShaderValue(shader_lights, ambient_color_loc, &ambient_color, SHADER_UNIFORM_VEC4);
 
+	view_pos_loc = GetShaderLocation(shader_lights, "viewPos");
+	view_tar_loc = GetShaderLocation(shader_lights, "viewTar");
+
 	player_angle = Vector2Zero();
 	player_angle.x = -PI/2;
 	player.fovy = 52.0f;
@@ -166,15 +176,18 @@ int main() {
 
 	room_model_full = LoadModel("res/models/room/room.obj");
 	SetMaterialTexture(&room_model_full.materials[0], MATERIAL_MAP_DIFFUSE, tex_room_ceiling);
-	SetMaterialTexture(&room_model_full.materials[1], MATERIAL_MAP_DIFFUSE, tex_room_wall);
-	SetMaterialTexture(&room_model_full.materials[2], MATERIAL_MAP_DIFFUSE, tex_room_floor);
+	SetMaterialTexture(&room_model_full.materials[1], MATERIAL_MAP_DIFFUSE, tex_room_floor);
+	SetMaterialTexture(&room_model_full.materials[2], MATERIAL_MAP_DIFFUSE, tex_room_wall);
+	room_model_full.materials[0].shader = shader_lights;
+	room_model_full.materials[1].shader = shader_lights;
+	room_model_full.materials[2].shader = shader_lights;
 
 	room_model_empty = LoadModel("res/models/room/room-empty.obj");
 	room_model_empty.materials->shader = shader_lights;
 
-	pistol_color.r = 0x10;
-	pistol_color.g = 0x10;
-	pistol_color.b = 0x16;
+	pistol_color.r = 0x20;
+	pistol_color.g = 0x20;
+	pistol_color.b = 0x22;
 	pistol_color.a = 0xFF;
 
 	pistol_pos.x = -0.62f;
@@ -221,7 +234,9 @@ int main() {
 	SetSoundVolume(sfx_pistol_load, 0.48f);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
-	CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
+	light = CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
+	light.color = WHITE;
+	UpdateLightValues(shader_lights, light);
 
 	player_target_pos = player.position;
 	player_raw_pos = player_target_pos;
@@ -320,6 +335,16 @@ int main() {
 		}
 
 		/* updating */
+		view_pos[0] = player.position.x;
+		view_pos[1] = player.position.y;
+		view_pos[2] = player.position.z;
+		SetShaderValue(shader_lights, view_pos_loc, &view_pos, SHADER_UNIFORM_VEC3);
+
+		view_tar[0] = player.target.x;
+		view_tar[1] = player.target.y;
+		view_tar[2] = player.target.z;
+		SetShaderValue(shader_lights, view_tar_loc, &view_tar, SHADER_UNIFORM_VEC3);
+
 		pistol_fire_frame -= time_delta * ANIM_FRAMERATE;
 		pistol_fire_frame = Clamp(pistol_fire_frame, 0.0f, FIRE_FRAME_MAX);
 
