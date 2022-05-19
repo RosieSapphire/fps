@@ -59,7 +59,7 @@ int main() {
 
 	bool view_toggle = 1;
 	bool hide_toggle = 0;
-	bool show_empty_room = 1;
+	bool show_empty_room = 0;
 	
 	Shader shader_lights;
 	int ambient_color_loc;
@@ -73,6 +73,9 @@ int main() {
 
 	Model room_model_full;
 	Model room_model_empty;
+	Texture2D tex_room_floor;
+	Texture2D tex_room_wall;
+	Texture2D tex_room_ceiling;
 
 	Color pistol_color;
 	Vector3 pistol_pos;
@@ -125,7 +128,7 @@ int main() {
 	SetRandomSeed((unsigned int)time(0));
 	HideCursor();
 
-	frames_per_second = GetMonitorRefreshRate(0);
+	frames_per_second = 60.0f; // GetMonitorRefreshRate(0);
 	SetTargetFPS(frames_per_second);
 	SetMousePosition(screen_width / 2, screen_height / 2);
 
@@ -157,8 +160,15 @@ int main() {
 	viewport.projection = CAMERA_ORTHOGRAPHIC;
 	viewport.up = player.up;
 
+	tex_room_floor = LoadTexture("res/models/room/textures/floor/diffuse.png");
+	tex_room_wall = LoadTexture("res/models/room/textures/wall/diffuse.png");
+	tex_room_ceiling = LoadTexture("res/models/room/textures/ceiling/diffuse.png");
+
 	room_model_full = LoadModel("res/models/room/room.obj");
-	room_model_full.materials->shader = shader_lights;
+	SetMaterialTexture(&room_model_full.materials[0], MATERIAL_MAP_DIFFUSE, tex_room_ceiling);
+	SetMaterialTexture(&room_model_full.materials[1], MATERIAL_MAP_DIFFUSE, tex_room_wall);
+	SetMaterialTexture(&room_model_full.materials[2], MATERIAL_MAP_DIFFUSE, tex_room_floor);
+
 	room_model_empty = LoadModel("res/models/room/room-empty.obj");
 	room_model_empty.materials->shader = shader_lights;
 
@@ -316,7 +326,7 @@ int main() {
 		UpdateModelAnimation(pistol_model, pistol_anims[1],
 				FIRE_FRAME_MAX - (int)pistol_fire_frame);
 
-		/* TODO: add proper reload sounds */
+		/* TODO: add Scout's reload as a 1/100 chance every time you reload */
 		pistol_reload_frame -= time_delta * ANIM_FRAMERATE;
 		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_FRAME_MAX);
 		if(pistol_reload_frame > 0.0f) {
@@ -396,8 +406,8 @@ int main() {
 			ignore_raycast[i] = Vector3Distance(target_pos_push, wall_test_points[i]) > PLAYER_RADIUS * 2;
 			if(ignore_raycast[i]) continue;
 
-			while(Vector3Distance(target_pos_push, wall_test_points[i]) < PLAYER_RADIUS)
-				target_pos_push = Vector3Add(target_pos_push, Vector3Scale(mouse_ray_collision[i].normal, time_delta));
+			/* while(Vector3Distance(target_pos_push, wall_test_points[i]) < PLAYER_RADIUS)
+				target_pos_push = Vector3Add(target_pos_push, Vector3Scale(mouse_ray_collision[i].normal, time_delta)); */
 		}
 
 		player_raw_pos = raw_pos_push;
@@ -465,7 +475,7 @@ int main() {
 					if(show_empty_room)
 						DrawModel(room_model_empty, Vector3Zero(), 1.0f, DARKGREEN);
 					else
-						DrawModel(room_model_full, Vector3Zero(), 1.0f, DARKGREEN);
+						DrawModel(room_model_full, Vector3Zero(), 1.0f, WHITE);
 
 				} EndMode3D();
 
@@ -474,7 +484,7 @@ int main() {
 					if(show_empty_room)
 						DrawModel(room_model_empty, Vector3Zero(), 1.0f, DARKGREEN);
 					else
-						DrawModel(room_model_full, Vector3Zero(), 1.0f, DARKGREEN);
+						DrawModel(room_model_full, Vector3Zero(), 1.0f, WHITE);
 
 					DrawModel(sphere_model, player_raw_pos, 0.01f, PINK);
 					DrawSphere(player.position, 0.005f, RED);
@@ -519,6 +529,13 @@ int main() {
 		} EndDrawing();
 	}
 
+	UnloadTexture(tex_room_floor);
+	UnloadTexture(tex_room_wall);
+	UnloadTexture(tex_room_ceiling);
+	UnloadSound(sfx_pistol_fire);
+	UnloadSound(sfx_pistol_click);
+	UnloadSound(sfx_pistol_eject);
+	UnloadSound(sfx_pistol_load);
 	UnloadModel(room_model_full);
 	UnloadModel(room_model_empty);
 	UnloadModel(sphere_model);
