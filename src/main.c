@@ -22,8 +22,8 @@
 #define HEADBOB_SCALE		0.04f
 #define HEADBOB_SPEED		250.0f
 
-#define FIRE_TIMER_MAX		0.121f
-#define RELOAD_TIMER_MAX	0.33f
+#define FIRE_FRAME_MAX		20
+#define RELOAD_FRAME_MAX	80
 #define PISTOL_MAX_PER_MAG	25
 
 #define RAY_COUNT			8
@@ -79,9 +79,10 @@ int main() {
 	Vector3 pistol_recoil_dir;
 	Model pistol_model;
 	ModelAnimation *pistol_anims;
-	unsigned int pistol_anim_count = 1;
-	float pistol_fire_frame = 20.0f;
-	float pistol_reload_frame = 20.0f;
+	unsigned int pistol_anim_count = 2;
+	float pistol_fire_frame = 0.0f;
+	float pistol_reload_frame = 0.0f;
+	int pistol_reload_sfx_play = 0;
 	int pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
 	int pistol_ammo_reserve = 50;
 	int pistol_ammo_text_pos[3];
@@ -104,7 +105,6 @@ int main() {
 	Sound sfx_footsteps[SFX_FOOTSTEP_COUNT];
 	bool footstep_played = 0;
 
-	float fire_timer = 0.0f;
 	Sound sfx_pistol_fire;
 	Sound sfx_pistol_click;
 
@@ -113,9 +113,6 @@ int main() {
 	monitor = GetCurrentMonitor();
 	screen_width = GetMonitorWidth(monitor);
 	screen_height = GetMonitorHeight(monitor);
-	/* TODO Fix it at different resolutions */
-	screen_width = 1920;
-	screen_height = 1080;
 	SetWindowSize(screen_width, screen_height);
 
 	pistol_ammo_text_pos[X] = screen_width / 64;
@@ -257,9 +254,11 @@ int main() {
 			viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
 		}
 
-		if(IsKeyPressed(KEY_R) && pistol_ammo_loaded < PISTOL_MAX_PER_MAG && pistol_reload_frame <= 0.0f) {
-			pistol_reload_frame = RELOAD_TIMER_MAX;
-			PlaySound(sfx_pistol_click);
+		if(IsKeyPressed(KEY_R)
+		&& pistol_ammo_loaded < PISTOL_MAX_PER_MAG
+		&& pistol_reload_frame <= 0.0f) {
+			pistol_reload_frame = RELOAD_FRAME_MAX;
+			pistol_reload_sfx_play = 0;
 			const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
 			if(pistol_ammo_reserve - ammo_exchange >= 0) {
 				pistol_ammo_reserve -= ammo_exchange;
@@ -270,28 +269,26 @@ int main() {
 			}
 		}
 
-		pistol_reload_frame -= time_delta;
-		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_TIMER_MAX);
-		if(pistol_reload_frame > 0.0f) {
-			UpdateModelAnimation(pistol_model, pistol_anims[2], (int)pistol_reload_frame);
-		}
-
-		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && fire_timer <= 0.0f && pistol_reload_frame <= 0.0f) {
+		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
+		&& pistol_fire_frame <= FIRE_FRAME_MAX / 2
+		&& pistol_reload_frame <= 0.0f) {
 			if(pistol_ammo_loaded > 0) {
-				SetSoundPitch(sfx_pistol_fire, 1.0f + ((float)GetRandomValue(-1, 1) / 32));
+				SetSoundPitch(sfx_pistol_fire,
+						1.0f + ((float)GetRandomValue(-1, 1) / 32));
 				PlaySound(sfx_pistol_fire);
-				pistol_fire_frame = 0.0f;
-				fire_timer = FIRE_TIMER_MAX;
+				pistol_fire_frame = FIRE_FRAME_MAX;
 
 				pistol_recoil_dir = (Vector3) {
-					(float)GetRandomValue(-4, 4) / 256,
-					(float)GetRandomValue(8, 16) / 256,
-					(float)GetRandomValue(-4, 4) / 256,
+					(float)GetRandomValue(-1, 1),
+					(float)GetRandomValue(2, 4),
+					(float)GetRandomValue(-1, 1),
 				};
+				Vector3Scale(pistol_recoil_dir, 0.004f);
+
 				pistol_ammo_loaded--;
 			} else {
-				pistol_reload_frame = RELOAD_TIMER_MAX;
-				PlaySound(sfx_pistol_click);
+				pistol_reload_frame = RELOAD_FRAME_MAX;
+				pistol_reload_sfx_play = 0;
 				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
 				if(pistol_ammo_reserve - ammo_exchange >= 0) {
 					pistol_ammo_reserve -= ammo_exchange;
@@ -303,15 +300,27 @@ int main() {
 			}
 		}
 
-		fire_timer -= time_delta;
-		fire_timer = Clamp(fire_timer, 0.0f, FIRE_TIMER_MAX);
-		pistol_fire_frame += time_delta * ANIM_FRAMERATE;
-		pistol_fire_frame =
-			Clamp(pistol_fire_frame, 0.0f, (float)pistol_anims[1].frameCount);
-
-		UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_fire_frame);
-
 		/* updating */
+		pistol_fire_frame -= time_delta * ANIM_FRAMERATE;
+		pistol_fire_frame = Clamp(pistol_fire_frame, 0.0f, FIRE_FRAME_MAX);
+
+		UpdateModelAnimation(pistol_model, pistol_anims[1],
+				FIRE_FRAME_MAX - (int)pistol_fire_frame);
+
+		/* TODO: add proper reload sounds */
+		pistol_reload_frame -= time_delta * ANIM_FRAMERATE;
+		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_FRAME_MAX);
+		if(pistol_reload_frame > 0.0f) {
+			if((pistol_reload_frame < 64 && pistol_reload_sfx_play < 1)
+			|| (pistol_reload_frame < 25 && pistol_reload_sfx_play < 2)) {
+				PlaySound(sfx_pistol_click);
+				pistol_reload_sfx_play++;
+			}
+
+			UpdateModelAnimation(pistol_model,
+					pistol_anims[2], RELOAD_FRAME_MAX - (int)pistol_reload_frame);
+		}
+
 		Vector2 player_angle_delta;
 		player_angle_delta.x = (mouse_pos.x - ((float)screen_width / 2)) * TURN_SPEED;
 		player_angle_delta.y = -((mouse_pos.y - ((float)screen_height / 2)) * TURN_SPEED);
@@ -398,7 +407,9 @@ int main() {
 		player_raw_target = Vector3Multiply(player_raw_target, (Vector3){PLAYER_RADIUS, PLAYER_RADIUS, PLAYER_RADIUS});
 		player_raw_target = Vector3Add(player_raw_target, player_raw_pos);
 		player.target = Vector3Add(player_raw_target, headbob);
-		player.target = Vector3Add(player.target, Vector3Scale(pistol_recoil_dir, fire_timer));
+		player.target = Vector3Add(player.target, Vector3Scale(pistol_recoil_dir,
+					Clamp((pistol_fire_frame * 0.0005f) - 0.0064f, 0.0f,
+						FIRE_FRAME_MAX)));
 		player.position = Vector3Add(player_raw_pos, headbob);
 
 		/* 3rd-person camera controls */
