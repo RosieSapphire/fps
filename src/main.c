@@ -8,8 +8,6 @@
 #include <stdlib.h>
 #include <time.h>
 
-#define SCREEN_WIDTH		1280
-#define SCREEN_HEIGHT		720
 #define SCREEN_LABEL		"Raylib Test"
 
 #define GLSL_VERSION		330
@@ -24,12 +22,27 @@
 #define HEADBOB_SCALE		0.04f
 #define HEADBOB_SPEED		250.0f
 
+#define FIRE_TIMER_MAX		0.121f
+#define RELOAD_TIMER_MAX	0.33f
+#define PISTOL_MAX_PER_MAG	25
+
 #define RAY_COUNT			8
 #define COLLISION_PUSHBACK	0.01f
 
 #define SFX_FOOTSTEP_COUNT	10
 
+#define ANIM_FRAMERATE		60.0f
+
+#define X 0
+#define Y 1
+#define S 2
+
 int main() {
+	int monitor;
+	int screen_width = 0;
+	int screen_height = 0;
+	float frames_per_second;
+
 	Color ray_colors[RAY_COUNT] = {
 		RED,
 		ORANGE,
@@ -66,8 +79,12 @@ int main() {
 	Vector3 pistol_recoil_dir;
 	Model pistol_model;
 	ModelAnimation *pistol_anims;
-	float pistol_anim_frame = 0.0f;
 	unsigned int pistol_anim_count = 1;
+	float pistol_fire_frame = 20.0f;
+	float pistol_reload_frame = 20.0f;
+	int pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
+	int pistol_ammo_reserve = 50;
+	int pistol_ammo_text_pos[3];
 
 	Mesh sphere_mesh;
 	Model sphere_model;
@@ -88,15 +105,30 @@ int main() {
 	bool footstep_played = 0;
 
 	float fire_timer = 0.0f;
-	Sound sfx_pistol;
+	Sound sfx_pistol_fire;
+	Sound sfx_pistol_click;
 
-	InitWindow(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_LABEL);
+	printf("%d, %d\n", screen_width, screen_height);
+	InitWindow(screen_width, screen_height, SCREEN_LABEL);
+	monitor = GetCurrentMonitor();
+	screen_width = GetMonitorWidth(monitor);
+	screen_height = GetMonitorHeight(monitor);
+	/* TODO Fix it at different resolutions */
+	screen_width = 1920;
+	screen_height = 1080;
+	SetWindowSize(screen_width, screen_height);
+
+	pistol_ammo_text_pos[X] = screen_width / 64;
+	pistol_ammo_text_pos[S] = screen_height / 32;
+	pistol_ammo_text_pos[Y] = screen_height - 32 - pistol_ammo_text_pos[S];
+
 	InitAudioDevice();
 	SetRandomSeed((unsigned int)time(0));
 	HideCursor();
 
-	SetTargetFPS(GetMonitorRefreshRate(0));
-	SetMousePosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+	frames_per_second = 60.0f;
+	SetTargetFPS(frames_per_second);
+	SetMousePosition(screen_width / 2, screen_height / 2);
 
 	shader_lights = LoadShader("res/shaders/base_lighting_vert.glsl", "res/shaders/base_lighting_frag.glsl");
 	ambient_color_loc = GetShaderLocation(shader_lights, "ambient");
@@ -151,9 +183,9 @@ int main() {
 
 	background_color = (Color){0x01, 0x02, 0x02, 0xFF};
 
-	render_texture = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-	view_model_render = LoadRenderTexture(SCREEN_WIDTH, SCREEN_HEIGHT);
-	render_rect = (Rectangle){0.0f, SCREEN_HEIGHT, SCREEN_WIDTH, -SCREEN_HEIGHT};
+	render_texture = LoadRenderTexture(screen_width, screen_height);
+	view_model_render = LoadRenderTexture(screen_width, screen_height);
+	render_rect = (Rectangle){0.0f, screen_height, screen_width, -screen_height};
 
 	sfx_footsteps[0] = LoadSound("res/sounds/footstep-01.wav");
 	sfx_footsteps[1] = LoadSound("res/sounds/footstep-02.wav");
@@ -166,8 +198,11 @@ int main() {
 	sfx_footsteps[8] = LoadSound("res/sounds/footstep-09.wav");
 	sfx_footsteps[9] = LoadSound("res/sounds/footstep-10.wav");
 
-	sfx_pistol = LoadSound("res/sounds/pistol-fire.wav");
-	SetSoundVolume(sfx_pistol, 0.45f);
+	sfx_pistol_fire = LoadSound("res/sounds/pistol-fire.wav");
+	SetSoundVolume(sfx_pistol_fire, 0.45f);
+
+	sfx_pistol_click = LoadSound("res/sounds/pistol-click.wav");
+	SetSoundVolume(sfx_pistol_fire, 0.45f);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
 	CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
@@ -197,7 +232,7 @@ int main() {
 
 		/* input */
 		mouse_pos = GetMousePosition();
-		SetMousePosition(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2);
+		SetMousePosition(screen_width / 2, screen_height / 2);
 
 		move_input.x += IsKeyDown(KEY_D) - IsKeyDown(KEY_A);
 		move_input.y += IsKeyDown(KEY_W) - IsKeyDown(KEY_S);
@@ -212,41 +247,74 @@ int main() {
 		if(IsKeyPressed(KEY_E))
 			show_empty_room = !show_empty_room;
 
-		if(IsKeyPressed(KEY_R)) {
+		if(IsKeyPressed(KEY_BACKSPACE)) {
 			player_target_pos = player.up;
 			player_angle = Vector2Zero();
+			pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
+			pistol_ammo_reserve = 50;
 			viewport.fovy = 8.0f;
 			viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
 			viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
 		}
 
-		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && fire_timer <= 0.0f) {
-			PlaySound(sfx_pistol);
-			pistol_anim_frame = 0.0f;
-			fire_timer = 0.2f;
-
-			pistol_recoil_dir = (Vector3) {
-				(float)GetRandomValue(-8, 8) / 256,
-				(float)GetRandomValue(8, 16) / 256,
-				(float)GetRandomValue(-8, 8) / 256,
-			};
-			printf("%f, %f, %f\n", pistol_recoil_dir.x, pistol_recoil_dir.y, pistol_recoil_dir.z);
+		if(IsKeyPressed(KEY_R) && pistol_ammo_loaded < PISTOL_MAX_PER_MAG && pistol_reload_frame <= 0.0f) {
+			pistol_reload_frame = RELOAD_TIMER_MAX;
+			PlaySound(sfx_pistol_click);
+			const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
+			if(pistol_ammo_reserve - ammo_exchange >= 0) {
+				pistol_ammo_reserve -= ammo_exchange;
+				pistol_ammo_loaded += ammo_exchange;
+			} else {
+				pistol_ammo_loaded += pistol_ammo_reserve;
+				pistol_ammo_reserve = 0;
+			}
 		}
 
-		if(fire_timer > 0.0f) {
-			pistol_anim_frame += time_delta * 60.0f;
-			fire_timer -= time_delta;
+		pistol_reload_frame -= time_delta;
+		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_TIMER_MAX);
+		if(pistol_reload_frame > 0.0f) {
+			UpdateModelAnimation(pistol_model, pistol_anims[2], (int)pistol_reload_frame);
 		}
-		fire_timer = Clamp(fire_timer, 0.0f, 0.2f);
-		pistol_anim_frame =
-			Clamp(pistol_anim_frame, 0.0f, (float)pistol_anims[1].frameCount);
 
-		UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_anim_frame);
+		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON) && fire_timer <= 0.0f && pistol_reload_frame <= 0.0f) {
+			if(pistol_ammo_loaded > 0) {
+				SetSoundPitch(sfx_pistol_fire, 1.0f + ((float)GetRandomValue(-1, 1) / 32));
+				PlaySound(sfx_pistol_fire);
+				pistol_fire_frame = 0.0f;
+				fire_timer = FIRE_TIMER_MAX;
+
+				pistol_recoil_dir = (Vector3) {
+					(float)GetRandomValue(-4, 4) / 256,
+					(float)GetRandomValue(8, 16) / 256,
+					(float)GetRandomValue(-4, 4) / 256,
+				};
+				pistol_ammo_loaded--;
+			} else {
+				pistol_reload_frame = RELOAD_TIMER_MAX;
+				PlaySound(sfx_pistol_click);
+				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
+				if(pistol_ammo_reserve - ammo_exchange >= 0) {
+					pistol_ammo_reserve -= ammo_exchange;
+					pistol_ammo_loaded += ammo_exchange;
+				} else {
+					pistol_ammo_loaded += pistol_ammo_reserve;
+					pistol_ammo_reserve = 0;
+				}
+			}
+		}
+
+		fire_timer -= time_delta;
+		fire_timer = Clamp(fire_timer, 0.0f, FIRE_TIMER_MAX);
+		pistol_fire_frame += time_delta * ANIM_FRAMERATE;
+		pistol_fire_frame =
+			Clamp(pistol_fire_frame, 0.0f, (float)pistol_anims[1].frameCount);
+
+		UpdateModelAnimation(pistol_model, pistol_anims[1], (int)pistol_fire_frame);
 
 		/* updating */
 		Vector2 player_angle_delta;
-		player_angle_delta.x = (mouse_pos.x - ((float)SCREEN_WIDTH / 2)) * TURN_SPEED;
-		player_angle_delta.y = -((mouse_pos.y - ((float)SCREEN_HEIGHT / 2)) * TURN_SPEED);
+		player_angle_delta.x = (mouse_pos.x - ((float)screen_width / 2)) * TURN_SPEED;
+		player_angle_delta.y = -((mouse_pos.y - ((float)screen_height / 2)) * TURN_SPEED);
 
 		if(player_angle.y + player_angle_delta.y > 1.0f) {
 			player_angle_delta.y = 1.0f - player_angle.y;
@@ -417,11 +485,15 @@ int main() {
 		BeginDrawing(); {
 			DrawTextureRec(render_texture.texture, render_rect, Vector2Zero(), WHITE);
 			if(view_toggle) {
-				DrawCircle(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, 1.0f, WHITE);
+				DrawCircle(screen_width / 2, screen_height / 2, 1.0f, WHITE);
 				DrawTextureRec(view_model_render.texture, render_rect, Vector2Zero(), WHITE);
 			}
 
 			DrawFPS(16, 16);
+
+			/* ammo counter */
+			DrawText(TextFormat("Ammo: %d/%d", pistol_ammo_loaded, pistol_ammo_reserve),
+				pistol_ammo_text_pos[X], pistol_ammo_text_pos[Y], pistol_ammo_text_pos[S], WHITE);
 		} EndDrawing();
 	}
 

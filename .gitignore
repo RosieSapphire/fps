@@ -3,3 +3,4 @@ compile_commands.json
 fps-d
 fps
 *.blend1
+.cache/
