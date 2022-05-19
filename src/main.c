@@ -107,6 +107,8 @@ int main() {
 
 	Sound sfx_pistol_fire;
 	Sound sfx_pistol_click;
+	Sound sfx_pistol_eject;
+	Sound sfx_pistol_load;
 
 	printf("%d, %d\n", screen_width, screen_height);
 	InitWindow(screen_width, screen_height, SCREEN_LABEL);
@@ -123,7 +125,7 @@ int main() {
 	SetRandomSeed((unsigned int)time(0));
 	HideCursor();
 
-	frames_per_second = 60.0f;
+	frames_per_second = GetMonitorRefreshRate(0);
 	SetTargetFPS(frames_per_second);
 	SetMousePosition(screen_width / 2, screen_height / 2);
 
@@ -195,11 +197,18 @@ int main() {
 	sfx_footsteps[8] = LoadSound("res/sounds/footstep-09.wav");
 	sfx_footsteps[9] = LoadSound("res/sounds/footstep-10.wav");
 
+	/* load pistol sfx */
 	sfx_pistol_fire = LoadSound("res/sounds/pistol-fire.wav");
 	SetSoundVolume(sfx_pistol_fire, 0.45f);
 
 	sfx_pistol_click = LoadSound("res/sounds/pistol-click.wav");
-	SetSoundVolume(sfx_pistol_fire, 0.45f);
+	SetSoundVolume(sfx_pistol_click, 0.45f);
+
+	sfx_pistol_eject = LoadSound("res/sounds/pistol-eject.wav");
+	SetSoundVolume(sfx_pistol_eject, 0.13f);
+
+	sfx_pistol_load = LoadSound("res/sounds/pistol-load.wav");
+	SetSoundVolume(sfx_pistol_load, 0.48f);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
 	CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
@@ -270,7 +279,7 @@ int main() {
 		}
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
-		&& pistol_fire_frame <= FIRE_FRAME_MAX / 2
+		&& pistol_fire_frame <= FIRE_FRAME_MAX * 0.6f
 		&& pistol_reload_frame <= 0.0f) {
 			if(pistol_ammo_loaded > 0) {
 				SetSoundPitch(sfx_pistol_fire,
@@ -311,9 +320,11 @@ int main() {
 		pistol_reload_frame -= time_delta * ANIM_FRAMERATE;
 		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_FRAME_MAX);
 		if(pistol_reload_frame > 0.0f) {
-			if((pistol_reload_frame < 64 && pistol_reload_sfx_play < 1)
-			|| (pistol_reload_frame < 25 && pistol_reload_sfx_play < 2)) {
-				PlaySound(sfx_pistol_click);
+			if(pistol_reload_frame < 64 && pistol_reload_sfx_play < 1) {
+				PlaySound(sfx_pistol_eject);
+				pistol_reload_sfx_play++;
+			} else if(pistol_reload_frame < 40 && pistol_reload_sfx_play < 2) {
+				PlaySound(sfx_pistol_load);
 				pistol_reload_sfx_play++;
 			}
 
