@@ -55,7 +55,7 @@ int main() {
 
 	Player player;
 	Pistol pistol;
-	Camera viewport;
+	Camera debug_viewport;
 
 	Model room_model_full;
 	Model room_model_empty;
@@ -104,11 +104,11 @@ int main() {
 	light_shader_initialize(&light_shader, "res/shaders/base_lighting_vert.glsl", "res/shaders/base_lighting_frag.glsl");
 	player_initialize(&player, screen_width, screen_height);
 	
-	viewport.fovy = 8.0f;
-	viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
-	viewport.target = (Vector3){0.1f, 0.0f, 0.00f};
-	viewport.projection = CAMERA_ORTHOGRAPHIC;
-	viewport.up = player.cam_view.up;
+	debug_viewport.fovy = 8.0f;
+	debug_viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
+	debug_viewport.target = (Vector3){0.1f, 0.0f, 0.00f};
+	debug_viewport.projection = CAMERA_ORTHOGRAPHIC;
+	debug_viewport.up = player.cam_view.up;
 
 	tex_room_floor = LoadTexture("res/models/room/textures/floor/diffuse.png");
 	tex_room_wall = LoadTexture("res/models/room/textures/wall/diffuse.png");
@@ -206,9 +206,9 @@ int main() {
 			player.angles = Vector2Zero();
 			pistol.ammo_loaded = PISTOL_MAX_PER_MAG;
 			pistol.ammo_reserve = 50;
-			viewport.fovy = 8.0f;
-			viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
-			viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
+			debug_viewport.fovy = 8.0f;
+			debug_viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
+			debug_viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
 		}
 
 		if(IsKeyPressed(KEY_R)) {
@@ -228,7 +228,6 @@ int main() {
 			if(pistol.fire_frame <= PISTOL_FIRE_FRAMES * 0.75f
 			&& pistol.reload_frame <= 0.0f) {
 				if(pistol.ammo_loaded > 0) {
-					Ray gun_ray;
 					RayCollision gun_ray_collision;
 					float bullet_ricochet_volume;
 					int last_bullet_sfx_play = bullet_ricochet_play;
@@ -238,9 +237,11 @@ int main() {
 					do { bullet_ricochet_play = GetRandomValue(0, 4);
 					} while(bullet_ricochet_play == last_bullet_sfx_play);
 
-					gun_ray.position = player.pos;
-					gun_ray.direction = Vector3Subtract(player.cam_view.target, player.cam_view.position);
-					gun_ray_collision = GetRayCollisionModel(gun_ray, room_model_full);
+					gun_ray_collision =
+						pistol_get_wall_collision(player.cam_view.position,
+						Vector3Subtract(player.cam_view.target, player.cam_view.position),
+						room_model_full);
+
 					bullet_ricochet_volume = 1 / Vector3Distance(player.cam_view.position, gun_ray_collision.point);
 					bullet_ricochet_volume = Clamp(bullet_ricochet_volume, 0.0f, 1.0f);
 					SetSoundVolume(sfx_bullet_bounce[bullet_ricochet_play], bullet_ricochet_volume);
@@ -343,15 +344,15 @@ int main() {
 		player.cam_view.position = Vector3Add(player.pos, headbob);
 
 		/* 3rd-person camera controls */
-		viewport.fovy += (IsKeyDown(KEY_RIGHT_SHIFT) * time_delta * 4.0f) -
+		debug_viewport.fovy += (IsKeyDown(KEY_RIGHT_SHIFT) * time_delta * 4.0f) -
 						(IsKeyDown(KEY_RIGHT_CONTROL) * time_delta * 4.0f);
 		
-		viewport.position.x += (IsKeyDown(KEY_LEFT) * time_delta * 4.0f) -
+		debug_viewport.position.x += (IsKeyDown(KEY_LEFT) * time_delta * 4.0f) -
 						(IsKeyDown(KEY_RIGHT) * time_delta * 4.0f);
-		viewport.position.z += (IsKeyDown(KEY_UP) * time_delta * 4.0f) -
+		debug_viewport.position.z += (IsKeyDown(KEY_UP) * time_delta * 4.0f) -
 						(IsKeyDown(KEY_DOWN) * time_delta * 4.0f);
 
-		viewport.target = Vector3Add(viewport.position, (Vector3){0.0f, -1.0f, 0.01f});
+		debug_viewport.target = Vector3Add(debug_viewport.position, (Vector3){0.0f, -1.0f, 0.01f});
 
 		if(fabsf(headbob_cos) > 0.9f) {
 			Sound footstep_cur = sfx_footsteps[GetRandomValue(0, SFX_FOOTSTEP_COUNT - 1)];
@@ -389,7 +390,7 @@ int main() {
 				} EndMode3D();
 
 			} else {
-				BeginMode3D(viewport); {
+				BeginMode3D(debug_viewport); {
 					if(show_empty_room)
 						DrawModel(room_model_empty, Vector3Zero(), 1.0f, DARKGREEN);
 					else

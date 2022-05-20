@@ -97,3 +97,10 @@ void pistol_update_anim_fire(Pistol *pistol, const float time_delta, const float
 	pistol->fire_frame = Clamp(pistol->fire_frame, 0.0f, PISTOL_FIRE_FRAMES);
 	UpdateModelAnimation(pistol->model, pistol->anims[1], PISTOL_FIRE_FRAMES - (int)pistol->fire_frame);
 }
+
+RayCollision pistol_get_wall_collision(const Vector3 pos, const Vector3 dir, const Model room_model) {
+	Ray gun_ray;
+	gun_ray.position = pos;
+	gun_ray.direction = dir;
+	return GetRayCollisionModel(gun_ray, room_model);
+}

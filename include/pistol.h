@@ -38,5 +38,6 @@ void pistol_reload(Pistol *pistol);
 void pistol_fire(Pistol *pistol, Vector3 *recoil_dir);
 void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const float rate);
 void pistol_update_anim_fire(Pistol *pistol, const float time_delta, const float rate);
+RayCollision pistol_get_wall_collision(const Vector3 pos, const Vector3 dir, const Model room_model);
 
 #endif
