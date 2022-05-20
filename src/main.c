@@ -1,12 +1,11 @@
 #include <stdio.h>
-#include "raylib.h"
-#include "raymath.h"
+#include <stdlib.h>
+#include <time.h>
+
+#include "pistol.h"
 
 #define RLIGHTS_IMPLEMENTATION
 #include "rlights.h"
-
-#include <stdlib.h>
-#include <time.h>
 
 #define SCREEN_LABEL		"Raylib Test"
 
@@ -22,11 +21,6 @@
 #define HEADBOB_SCALE		0.04f
 #define HEADBOB_SPEED		250.0f
 
-#define FIRE_FRAME_MAX		30
-#define RELOAD_FRAME_MAX	80
-#define PISTOL_MAX_PER_MAG	25
-#define ADS_LERP_SPEED		12.0f
-
 #define PLAYER_NORMAL_FOV	52.0f
 #define PLAYER_AIM_FOV		PLAYER_NORMAL_FOV / 2
 
@@ -41,75 +35,6 @@
 #define X 0
 #define Y 1
 #define S 2
-
-typedef struct {
-	Color color;
-	Vector3 pos;
-	Vector3 ads_pos;
-	Vector3 hip_pos;
-
-	Model model;
-	ModelAnimation *anims;
-
-	unsigned int anim_count;
-	float fire_frame;
-	float reload_frame;
-	int reload_sfx_play;
-
-	int ammo_loaded;
-	int ammo_reserve;
-
-	Sound sfx_fire;
-	Sound sfx_click;
-	Sound sfx_eject;
-	Sound sfx_load;
-} Pistol;
-
-void pistol_initialize(Pistol *pistol, const Shader shader) {
-	pistol->anim_count = 2;
-	pistol->fire_frame = 0.0f;
-	pistol->reload_frame = 0.0f;
-	pistol->reload_sfx_play = 0;
-	pistol->ammo_loaded = PISTOL_MAX_PER_MAG;
-	pistol->ammo_reserve = 50;
-
-	pistol->color.r = 0x20;
-	pistol->color.g = 0x20;
-	pistol->color.b = 0x22;
-	pistol->color.a = 0xFF;
-
-	pistol->ads_pos.x = -0.62f;
-	pistol->ads_pos.y = -0.096f; 
-	pistol->ads_pos.z = 0.0f;
-	pistol->hip_pos.x = -0.62f;
-	pistol->hip_pos.y = -0.25f;
-	pistol->hip_pos.z = -0.21f;
-	pistol->pos = pistol->hip_pos;
-
-	pistol->model = LoadModel("res/models/weapons/pistol/pistol.iqm");
-	pistol->model.materials->shader = shader;
-	pistol->model.materials->maps->color = pistol->color;
-	pistol->anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol->anim_count);
-	pistol->model.transform = MatrixMultiply(pistol->model.transform, MatrixRotateX(PI/2));
-
-	pistol->sfx_fire = LoadSound("res/sounds/pistol-fire.wav");
-	pistol->sfx_click = LoadSound("res/sounds/pistol-click.wav");
-	pistol->sfx_eject = LoadSound("res/sounds/pistol-eject.wav");
-	pistol->sfx_load = LoadSound("res/sounds/pistol-load.wav");
-	SetSoundVolume(pistol->sfx_fire, 0.7f);
-	SetSoundVolume(pistol->sfx_click, 0.45f);
-	SetSoundVolume(pistol->sfx_eject, 0.18f);
-	SetSoundVolume(pistol->sfx_load, 0.62f);
-}
-
-void pistol_terminate(Pistol *pistol) {
-	UnloadModel(pistol->model);
-	UnloadModelAnimations(pistol->anims, pistol->anim_count);
-	UnloadSound(pistol->sfx_fire);
-	UnloadSound(pistol->sfx_click);
-	UnloadSound(pistol->sfx_eject);
-	UnloadSound(pistol->sfx_load);
-}
 
 int main() {
 	int monitor;
@@ -147,6 +72,7 @@ int main() {
 
 	Vector2 player_angle;
 	Camera player;
+	Pistol pistol;
 
 	Camera cam_view_model;
 	Camera viewport;
@@ -159,7 +85,6 @@ int main() {
 
 	int ammo_text_pos[3];
 	Vector3 recoil_dir;
-	Pistol pistol;
 
 	Mesh sphere_mesh;
 	Model sphere_model;
@@ -340,7 +265,7 @@ int main() {
 		&& pistol.ammo_loaded < PISTOL_MAX_PER_MAG
 		&& pistol.reload_frame <= 0.0f) {
 			if(pistol.ammo_reserve > 0) {
-				pistol.reload_frame = RELOAD_FRAME_MAX;
+				pistol.reload_frame = PISTOL_RELOAD_FRAMES;
 				pistol.reload_sfx_play = 0;
 				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
 				if(pistol.ammo_reserve - ammo_exchange >= 0) {
@@ -357,20 +282,20 @@ int main() {
 
 		float new_crosshair_opacity;
 		if(IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol.reload_frame <= 0.0f && !(is_running - 1)) {
-			pistol.pos = Vector3Lerp(pistol.pos, pistol.ads_pos, time_delta * ADS_LERP_SPEED);
-			player.fovy = Lerp(player.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
-			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
-			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 0.0f, time_delta * ADS_LERP_SPEED);
+			pistol.pos = Vector3Lerp(pistol.pos, pistol.ads_pos, time_delta * PISTOL_ADS_LERP_SPEED);
+			player.fovy = Lerp(player.fovy, PLAYER_AIM_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
+			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_AIM_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
+			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 0.0f, time_delta * PISTOL_ADS_LERP_SPEED);
 		} else {
-			pistol.pos = Vector3Lerp(pistol.pos, pistol.hip_pos, time_delta * ADS_LERP_SPEED);
-			player.fovy = Lerp(player.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
-			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
-			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 1.0f, time_delta * ADS_LERP_SPEED);
+			pistol.pos = Vector3Lerp(pistol.pos, pistol.hip_pos, time_delta * PISTOL_ADS_LERP_SPEED);
+			player.fovy = Lerp(player.fovy, PLAYER_NORMAL_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
+			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_NORMAL_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
+			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 1.0f, time_delta * PISTOL_ADS_LERP_SPEED);
 		}
 		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
-		&& pistol.fire_frame <= FIRE_FRAME_MAX * 0.75f
+		&& pistol.fire_frame <= PISTOL_FIRE_FRAMES * 0.75f
 		&& pistol.reload_frame <= 0.0f) {
 			if(pistol.ammo_loaded > 0) {
 				Ray gun_ray;
@@ -382,7 +307,7 @@ int main() {
 				SetSoundPitch(pistol.sfx_fire,
 						1.0f + ((float)GetRandomValue(-1, 1) / 32));
 				PlaySound(pistol.sfx_fire);
-				pistol.fire_frame = FIRE_FRAME_MAX;
+				pistol.fire_frame = PISTOL_FIRE_FRAMES;
 
 				recoil_dir = (Vector3) {
 					(float)GetRandomValue(-1, 1),
@@ -407,7 +332,7 @@ int main() {
 				PlaySound(sfx_bullet_bounce[bullet_ricochet_play]);
 			} else {
 				if(pistol.ammo_reserve > 0) {
-					pistol.reload_frame = RELOAD_FRAME_MAX;
+					pistol.reload_frame = PISTOL_RELOAD_FRAMES;
 					pistol.reload_sfx_play = 0;
 					const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
 					if(pistol.ammo_reserve - ammo_exchange >= 0) {
@@ -434,17 +359,17 @@ int main() {
 		view_tar[2] = player.target.z;
 		SetShaderValue(shader_lights, view_tar_loc, &view_tar, SHADER_UNIFORM_VEC3);
 
-		recoil_dir = Vector3Lerp(recoil_dir, Vector3Zero(), time_delta * ADS_LERP_SPEED);
+		recoil_dir = Vector3Lerp(recoil_dir, Vector3Zero(), time_delta * PISTOL_ADS_LERP_SPEED);
 
 		pistol.fire_frame -= time_delta * ANIM_FRAMERATE;
-		pistol.fire_frame = Clamp(pistol.fire_frame, 0.0f, FIRE_FRAME_MAX);
+		pistol.fire_frame = Clamp(pistol.fire_frame, 0.0f, PISTOL_FIRE_FRAMES);
 
 		UpdateModelAnimation(pistol.model, pistol.anims[1],
-				FIRE_FRAME_MAX - (int)pistol.fire_frame);
+				PISTOL_FIRE_FRAMES - (int)pistol.fire_frame);
 
 		/* TODO: add Scout's reload as a 1/100 chance every time you reload */
 		pistol.reload_frame -= time_delta * ANIM_FRAMERATE;
-		pistol.reload_frame = Clamp(pistol.reload_frame, 0.0f, RELOAD_FRAME_MAX);
+		pistol.reload_frame = Clamp(pistol.reload_frame, 0.0f, PISTOL_RELOAD_FRAMES);
 		if(pistol.reload_frame > 0.0f) {
 			if(pistol.reload_frame < 64 && pistol.reload_sfx_play < 1) {
 				PlaySound(pistol.sfx_eject);
@@ -455,7 +380,7 @@ int main() {
 			}
 
 			UpdateModelAnimation(pistol.model,
-					pistol.anims[2], RELOAD_FRAME_MAX - (int)pistol.reload_frame);
+					pistol.anims[2], PISTOL_RELOAD_FRAMES - (int)pistol.reload_frame);
 		}
 
 		Vector2 player_angle_delta;
