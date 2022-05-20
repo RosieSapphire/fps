@@ -25,5 +25,6 @@ typedef struct {
 
 void player_initialize(Player *player, const int screen_width, const int screen_height);
 void player_terminate(Player *player);
+void player_lerp_ads(Player *player, Pistol *pistol, bool is_scoping, const float time_delta, Color *crosshair_color);
 
 #endif

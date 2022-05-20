@@ -195,6 +195,7 @@ int main() {
 		float headbob_intensity;
 		float headbob_sin;
 		float headbob_cos;
+		bool is_scoping;
 		move_speed = Vector3Zero();
 		time_delta = GetFrameTime();
 		time_elapsed += time_delta;
@@ -238,19 +239,8 @@ int main() {
 			}
 		}
 
-		float new_crosshair_opacity;
-		if(IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol.reload_frame <= 0.0f && !(is_running - 1)) {
-			pistol.pos = Vector3Lerp(pistol.pos, pistol.ads_pos, time_delta * PISTOL_ADS_LERP_SPEED);
-			player.cam_view.fovy = Lerp(player.cam_view.fovy, PLAYER_AIM_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
-			player.cam_weapon.fovy = Lerp(player.cam_weapon.fovy, PLAYER_AIM_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
-			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 0.0f, time_delta * PISTOL_ADS_LERP_SPEED);
-		} else {
-			pistol.pos = Vector3Lerp(pistol.pos, pistol.hip_pos, time_delta * PISTOL_ADS_LERP_SPEED);
-			player.cam_view.fovy = Lerp(player.cam_view.fovy, PLAYER_NORMAL_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
-			player.cam_weapon.fovy = Lerp(player.cam_weapon.fovy, PLAYER_NORMAL_FOV, time_delta * PISTOL_ADS_LERP_SPEED);
-			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 1.0f, time_delta * PISTOL_ADS_LERP_SPEED);
-		}
-		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
+		is_scoping = IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol.reload_frame <= 0.0f && !(is_running - 1);
+		player_lerp_ads(&player, &pistol, is_scoping, time_delta, &crosshair_color);
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
 			if(pistol.fire_frame <= PISTOL_FIRE_FRAMES * 0.75f
