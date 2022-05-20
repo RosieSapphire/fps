@@ -42,6 +42,75 @@
 #define Y 1
 #define S 2
 
+typedef struct {
+	Color color;
+	Vector3 pos;
+	Vector3 ads_pos;
+	Vector3 hip_pos;
+
+	Model model;
+	ModelAnimation *anims;
+
+	unsigned int anim_count;
+	float fire_frame;
+	float reload_frame;
+	int reload_sfx_play;
+
+	int ammo_loaded;
+	int ammo_reserve;
+
+	Sound sfx_fire;
+	Sound sfx_click;
+	Sound sfx_eject;
+	Sound sfx_load;
+} Pistol;
+
+void pistol_initialize(Pistol *pistol, const Shader shader) {
+	pistol->anim_count = 2;
+	pistol->fire_frame = 0.0f;
+	pistol->reload_frame = 0.0f;
+	pistol->reload_sfx_play = 0;
+	pistol->ammo_loaded = PISTOL_MAX_PER_MAG;
+	pistol->ammo_reserve = 50;
+
+	pistol->color.r = 0x20;
+	pistol->color.g = 0x20;
+	pistol->color.b = 0x22;
+	pistol->color.a = 0xFF;
+
+	pistol->ads_pos.x = -0.62f;
+	pistol->ads_pos.y = -0.096f; 
+	pistol->ads_pos.z = 0.0f;
+	pistol->hip_pos.x = -0.62f;
+	pistol->hip_pos.y = -0.25f;
+	pistol->hip_pos.z = -0.21f;
+	pistol->pos = pistol->hip_pos;
+
+	pistol->model = LoadModel("res/models/weapons/pistol/pistol.iqm");
+	pistol->model.materials->shader = shader;
+	pistol->model.materials->maps->color = pistol->color;
+	pistol->anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol->anim_count);
+	pistol->model.transform = MatrixMultiply(pistol->model.transform, MatrixRotateX(PI/2));
+
+	pistol->sfx_fire = LoadSound("res/sounds/pistol-fire.wav");
+	pistol->sfx_click = LoadSound("res/sounds/pistol-click.wav");
+	pistol->sfx_eject = LoadSound("res/sounds/pistol-eject.wav");
+	pistol->sfx_load = LoadSound("res/sounds/pistol-load.wav");
+	SetSoundVolume(pistol->sfx_fire, 0.7f);
+	SetSoundVolume(pistol->sfx_click, 0.45f);
+	SetSoundVolume(pistol->sfx_eject, 0.18f);
+	SetSoundVolume(pistol->sfx_load, 0.62f);
+}
+
+void pistol_terminate(Pistol *pistol) {
+	UnloadModel(pistol->model);
+	UnloadModelAnimations(pistol->anims, pistol->anim_count);
+	UnloadSound(pistol->sfx_fire);
+	UnloadSound(pistol->sfx_click);
+	UnloadSound(pistol->sfx_eject);
+	UnloadSound(pistol->sfx_load);
+}
+
 int main() {
 	int monitor;
 	int screen_width = 0;
@@ -88,21 +157,9 @@ int main() {
 	Texture2D tex_room_wall;
 	Texture2D tex_room_ceiling;
 
-	Color pistol_color;
-	Vector3 pistol_pos;
-	Vector3 pistol_ads_pos;
-	Vector3 pistol_hip_pos;
-	Vector3 pistol_recoil_dir;
-	Model pistol_model;
-	ModelAnimation *pistol_anims;
-	unsigned int pistol_anim_count = 2;
-	float pistol_fire_frame = 0.0f;
-	float pistol_reload_frame = 0.0f;
-	int pistol_reload_sfx_play = 0;
-
-	int pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
-	int pistol_ammo_reserve = 50;
-	int pistol_ammo_text_pos[3];
+	int ammo_text_pos[3];
+	Vector3 recoil_dir;
+	Pistol pistol;
 
 	Mesh sphere_mesh;
 	Model sphere_model;
@@ -126,20 +183,11 @@ int main() {
 	int bullet_ricochet_play = 0;
 	bool footstep_played = 0;
 
-	Sound sfx_pistol_fire;
-	Sound sfx_pistol_click;
-	Sound sfx_pistol_eject;
-	Sound sfx_pistol_load;
-
 	InitWindow(screen_width, screen_height, SCREEN_LABEL);
 	monitor = GetCurrentMonitor();
 	screen_width = GetMonitorWidth(monitor);
 	screen_height = GetMonitorHeight(monitor);
 	SetWindowSize(screen_width, screen_height);
-
-	pistol_ammo_text_pos[X] = screen_width / 64;
-	pistol_ammo_text_pos[S] = screen_height / 32;
-	pistol_ammo_text_pos[Y] = screen_height - 32 - pistol_ammo_text_pos[S];
 
 	InitAudioDevice();
 	SetMasterVolume(0.5f);
@@ -201,26 +249,9 @@ int main() {
 	room_model_empty = LoadModel("res/models/room/room-empty.obj");
 	room_model_empty.materials->shader = shader_lights;
 
-	pistol_color.r = 0x20;
-	pistol_color.g = 0x20;
-	pistol_color.b = 0x22;
-	pistol_color.a = 0xFF;
-
-	pistol_ads_pos.x = -0.62f;
-	pistol_ads_pos.y = -0.096f; 
-	pistol_ads_pos.z = 0.0f;
-
-	pistol_hip_pos.x = -0.62f;
-	pistol_hip_pos.y = -0.25f;
-	pistol_hip_pos.z = -0.21f;
-
-	pistol_pos = pistol_hip_pos;
-
-	pistol_model = LoadModel("res/models/weapons/pistol/pistol.iqm");
-	pistol_model.materials->shader = shader_lights;
-	pistol_model.materials->maps->color = pistol_color;
-	pistol_anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol_anim_count);
-	pistol_model.transform = MatrixMultiply(pistol_model.transform, MatrixRotateX(PI/2));
+	ammo_text_pos[X] = screen_width / 64;
+	ammo_text_pos[S] = screen_height / 32;
+	ammo_text_pos[Y] = screen_height - 32 - ammo_text_pos[S];
 
 	sphere_mesh = GenMeshSphere(1.0f, 32, 32);
 	sphere_model = LoadModelFromMesh(sphere_mesh);
@@ -248,18 +279,7 @@ int main() {
 	sfx_bullet_bounce[3] = LoadSound("res/sounds/ricoche-04.wav");
 	sfx_bullet_bounce[4] = LoadSound("res/sounds/ricoche-05.wav");
 
-	/* load pistol sfx */
-	sfx_pistol_fire = LoadSound("res/sounds/pistol-fire.wav");
-	SetSoundVolume(sfx_pistol_fire, 0.7f);
-
-	sfx_pistol_click = LoadSound("res/sounds/pistol-click.wav");
-	SetSoundVolume(sfx_pistol_click, 0.45f);
-
-	sfx_pistol_eject = LoadSound("res/sounds/pistol-eject.wav");
-	SetSoundVolume(sfx_pistol_eject, 0.18f);
-
-	sfx_pistol_load = LoadSound("res/sounds/pistol-load.wav");
-	SetSoundVolume(sfx_pistol_load, 0.62f);
+	pistol_initialize(&pistol, shader_lights);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
 	light = CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
@@ -309,40 +329,40 @@ int main() {
 		if(IsKeyPressed(KEY_BACKSPACE)) {
 			player_target_pos = player.up;
 			player_angle = Vector2Zero();
-			pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
-			pistol_ammo_reserve = 50;
+			pistol.ammo_loaded = PISTOL_MAX_PER_MAG;
+			pistol.ammo_reserve = 50;
 			viewport.fovy = 8.0f;
 			viewport.position = (Vector3){0.0f, 5.0f, 0.0f};
 			viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
 		}
 
 		if(IsKeyPressed(KEY_R)
-		&& pistol_ammo_loaded < PISTOL_MAX_PER_MAG
-		&& pistol_reload_frame <= 0.0f) {
-			if(pistol_ammo_reserve > 0) {
-				pistol_reload_frame = RELOAD_FRAME_MAX;
-				pistol_reload_sfx_play = 0;
-				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
-				if(pistol_ammo_reserve - ammo_exchange >= 0) {
-					pistol_ammo_reserve -= ammo_exchange;
-					pistol_ammo_loaded += ammo_exchange;
+		&& pistol.ammo_loaded < PISTOL_MAX_PER_MAG
+		&& pistol.reload_frame <= 0.0f) {
+			if(pistol.ammo_reserve > 0) {
+				pistol.reload_frame = RELOAD_FRAME_MAX;
+				pistol.reload_sfx_play = 0;
+				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
+				if(pistol.ammo_reserve - ammo_exchange >= 0) {
+					pistol.ammo_reserve -= ammo_exchange;
+					pistol.ammo_loaded += ammo_exchange;
 				} else {
-					pistol_ammo_loaded += pistol_ammo_reserve;
-					pistol_ammo_reserve = 0;
+					pistol.ammo_loaded += pistol.ammo_reserve;
+					pistol.ammo_reserve = 0;
 				}
 			} else {
-				PlaySound(sfx_pistol_click);
+				PlaySound(pistol.sfx_click);
 			}
 		}
 
 		float new_crosshair_opacity;
-		if(IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol_reload_frame <= 0.0f && !(is_running - 1)) {
-			pistol_pos = Vector3Lerp(pistol_pos, pistol_ads_pos, time_delta * ADS_LERP_SPEED);
+		if(IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol.reload_frame <= 0.0f && !(is_running - 1)) {
+			pistol.pos = Vector3Lerp(pistol.pos, pistol.ads_pos, time_delta * ADS_LERP_SPEED);
 			player.fovy = Lerp(player.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
 			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
 			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 0.0f, time_delta * ADS_LERP_SPEED);
 		} else {
-			pistol_pos = Vector3Lerp(pistol_pos, pistol_hip_pos, time_delta * ADS_LERP_SPEED);
+			pistol.pos = Vector3Lerp(pistol.pos, pistol.hip_pos, time_delta * ADS_LERP_SPEED);
 			player.fovy = Lerp(player.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
 			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
 			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 1.0f, time_delta * ADS_LERP_SPEED);
@@ -350,28 +370,28 @@ int main() {
 		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
-		&& pistol_fire_frame <= FIRE_FRAME_MAX * 0.75f
-		&& pistol_reload_frame <= 0.0f) {
-			if(pistol_ammo_loaded > 0) {
+		&& pistol.fire_frame <= FIRE_FRAME_MAX * 0.75f
+		&& pistol.reload_frame <= 0.0f) {
+			if(pistol.ammo_loaded > 0) {
 				Ray gun_ray;
 				RayCollision gun_ray_collision;
 				float bullet_ricochet_volume;
 				int last_bullet_sfx_play = bullet_ricochet_play;
 
 				/* play bullet fire sound */
-				SetSoundPitch(sfx_pistol_fire,
+				SetSoundPitch(pistol.sfx_fire,
 						1.0f + ((float)GetRandomValue(-1, 1) / 32));
-				PlaySound(sfx_pistol_fire);
-				pistol_fire_frame = FIRE_FRAME_MAX;
+				PlaySound(pistol.sfx_fire);
+				pistol.fire_frame = FIRE_FRAME_MAX;
 
-				pistol_recoil_dir = (Vector3) {
+				recoil_dir = (Vector3) {
 					(float)GetRandomValue(-1, 1),
 					(float)GetRandomValue(2, 4),
 					(float)GetRandomValue(-1, 1),
 				};
-				pistol_recoil_dir = Vector3Scale(pistol_recoil_dir, 0.004f);
+				recoil_dir = Vector3Scale(recoil_dir, 0.004f);
 
-				pistol_ammo_loaded--;
+				pistol.ammo_loaded--;
 
 				/* play ricochete against wall */
 				do {
@@ -386,19 +406,19 @@ int main() {
 				SetSoundVolume(sfx_bullet_bounce[bullet_ricochet_play], bullet_ricochet_volume);
 				PlaySound(sfx_bullet_bounce[bullet_ricochet_play]);
 			} else {
-				if(pistol_ammo_reserve > 0) {
-					pistol_reload_frame = RELOAD_FRAME_MAX;
-					pistol_reload_sfx_play = 0;
-					const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
-					if(pistol_ammo_reserve - ammo_exchange >= 0) {
-						pistol_ammo_reserve -= ammo_exchange;
-						pistol_ammo_loaded += ammo_exchange;
+				if(pistol.ammo_reserve > 0) {
+					pistol.reload_frame = RELOAD_FRAME_MAX;
+					pistol.reload_sfx_play = 0;
+					const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
+					if(pistol.ammo_reserve - ammo_exchange >= 0) {
+						pistol.ammo_reserve -= ammo_exchange;
+						pistol.ammo_loaded += ammo_exchange;
 					} else {
-						pistol_ammo_loaded += pistol_ammo_reserve;
-						pistol_ammo_reserve = 0;
+						pistol.ammo_loaded += pistol.ammo_reserve;
+						pistol.ammo_reserve = 0;
 					}
 				} else {
-					PlaySound(sfx_pistol_click);
+					PlaySound(pistol.sfx_click);
 				}
 			}
 		}
@@ -414,28 +434,28 @@ int main() {
 		view_tar[2] = player.target.z;
 		SetShaderValue(shader_lights, view_tar_loc, &view_tar, SHADER_UNIFORM_VEC3);
 
-		pistol_recoil_dir = Vector3Lerp(pistol_recoil_dir, Vector3Zero(), time_delta * ADS_LERP_SPEED);
+		recoil_dir = Vector3Lerp(recoil_dir, Vector3Zero(), time_delta * ADS_LERP_SPEED);
 
-		pistol_fire_frame -= time_delta * ANIM_FRAMERATE;
-		pistol_fire_frame = Clamp(pistol_fire_frame, 0.0f, FIRE_FRAME_MAX);
+		pistol.fire_frame -= time_delta * ANIM_FRAMERATE;
+		pistol.fire_frame = Clamp(pistol.fire_frame, 0.0f, FIRE_FRAME_MAX);
 
-		UpdateModelAnimation(pistol_model, pistol_anims[1],
-				FIRE_FRAME_MAX - (int)pistol_fire_frame);
+		UpdateModelAnimation(pistol.model, pistol.anims[1],
+				FIRE_FRAME_MAX - (int)pistol.fire_frame);
 
 		/* TODO: add Scout's reload as a 1/100 chance every time you reload */
-		pistol_reload_frame -= time_delta * ANIM_FRAMERATE;
-		pistol_reload_frame = Clamp(pistol_reload_frame, 0.0f, RELOAD_FRAME_MAX);
-		if(pistol_reload_frame > 0.0f) {
-			if(pistol_reload_frame < 64 && pistol_reload_sfx_play < 1) {
-				PlaySound(sfx_pistol_eject);
-				pistol_reload_sfx_play++;
-			} else if(pistol_reload_frame < 40 && pistol_reload_sfx_play < 2) {
-				PlaySound(sfx_pistol_load);
-				pistol_reload_sfx_play++;
+		pistol.reload_frame -= time_delta * ANIM_FRAMERATE;
+		pistol.reload_frame = Clamp(pistol.reload_frame, 0.0f, RELOAD_FRAME_MAX);
+		if(pistol.reload_frame > 0.0f) {
+			if(pistol.reload_frame < 64 && pistol.reload_sfx_play < 1) {
+				PlaySound(pistol.sfx_eject);
+				pistol.reload_sfx_play++;
+			} else if(pistol.reload_frame < 40 && pistol.reload_sfx_play < 2) {
+				PlaySound(pistol.sfx_load);
+				pistol.reload_sfx_play++;
 			}
 
-			UpdateModelAnimation(pistol_model,
-					pistol_anims[2], RELOAD_FRAME_MAX - (int)pistol_reload_frame);
+			UpdateModelAnimation(pistol.model,
+					pistol.anims[2], RELOAD_FRAME_MAX - (int)pistol.reload_frame);
 		}
 
 		Vector2 player_angle_delta;
@@ -514,7 +534,7 @@ int main() {
 		player_raw_target = Vector3Multiply(player_raw_target, (Vector3){PLAYER_RADIUS, PLAYER_RADIUS, PLAYER_RADIUS});
 		player_raw_target = Vector3Add(player_raw_target, player_raw_pos);
 		player.target = Vector3Add(player_raw_target, headbob);
-		player.target = Vector3Add(player.target, pistol_recoil_dir);
+		player.target = Vector3Add(player.target, recoil_dir);
 		player.position = Vector3Add(player_raw_pos, headbob);
 
 		/* 3rd-person camera controls */
@@ -545,10 +565,10 @@ int main() {
 		BeginTextureMode(view_model_render); {
 			BeginMode3D(cam_view_model); {
 				ClearBackground((Color){0xFF, 0xFF, 0xFF, 0x00});
-				DrawModel(pistol_model,
-					Vector3Add(pistol_pos,
+				DrawModel(pistol.model,
+					Vector3Add(pistol.pos,
 					Vector3Scale((Vector3){0.0f, headbob_sin * 0.5f, -headbob_cos},
-					headbob_intensity * HEADBOB_SCALE * 0.2f)), 1.0f, pistol_color);
+					headbob_intensity * HEADBOB_SCALE * 0.2f)), 1.0f, pistol.color);
 			} EndMode3D();
 		} EndTextureMode();
 
@@ -573,7 +593,7 @@ int main() {
 					DrawModel(sphere_model, player_raw_pos, 0.01f, PINK);
 					DrawSphere(player.position, 0.005f, RED);
 					DrawSphere(player_target_pos, 0.02f, WHITE);
-					DrawModel(pistol_model, pistol_pos, 1.0f, pistol_color);
+					DrawModel(pistol.model, pistol.pos, 1.0f, pistol.color);
 
 					DrawRay((Ray){player_raw_pos, (Vector3){cos_player_angle_x * 0.2f, 1.0f, sin_player_angle_x * 0.2f}},
 					RAYWHITE);
@@ -607,22 +627,20 @@ int main() {
 
 			DrawFPS(16, 16);
 
-			/* ammo counter */
-			DrawText(TextFormat("Ammo: %d/%d", pistol_ammo_loaded, pistol_ammo_reserve),
-				pistol_ammo_text_pos[X], pistol_ammo_text_pos[Y], pistol_ammo_text_pos[S], WHITE);
+			/* pistol ammo counter */
+			DrawText(TextFormat("Ammo: %d/%d", pistol.ammo_loaded, pistol.ammo_reserve),
+				ammo_text_pos[X], ammo_text_pos[Y], ammo_text_pos[S], WHITE);
 		} EndDrawing();
 	}
 
 	UnloadTexture(tex_room_floor);
 	UnloadTexture(tex_room_wall);
 	UnloadTexture(tex_room_ceiling);
-	UnloadSound(sfx_pistol_fire);
-	UnloadSound(sfx_pistol_click);
-	UnloadSound(sfx_pistol_eject);
-	UnloadSound(sfx_pistol_load);
 	UnloadModel(room_model_full);
 	UnloadModel(room_model_empty);
 	UnloadModel(sphere_model);
+
+	pistol_terminate(&pistol);
 
 	/* unloading sounds */
 	const Sound *cur = sfx_footsteps;
