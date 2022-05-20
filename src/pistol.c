@@ -93,3 +93,9 @@ void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const flo
 				pistol->anims[2], PISTOL_RELOAD_FRAMES - (int)pistol->reload_frame);
 	}
 }
+
+void pistol_update_anim_fire(Pistol *pistol, const float time_delta, const float rate) {
+	pistol->fire_frame -= time_delta * rate;
+	pistol->fire_frame = Clamp(pistol->fire_frame, 0.0f, PISTOL_FIRE_FRAMES);
+	UpdateModelAnimation(pistol->model, pistol->anims[1], PISTOL_FIRE_FRAMES - (int)pistol->fire_frame);
+}

@@ -8,8 +8,8 @@ CFLAGS_DEBUG=-Wall -Wextra -Werror -pedantic -g3 $(INCDIRS) $(OPT_DEBUG)
 OPT_RELEASE=-O2
 CFLAGS_RELEASE=-pedantic $(INCDIRS) $(OPT_RELEASE)
 
-CFILES=main.c pistol.c
-OBJECTS=obj/main.o obj/pistol.o
+CFILES=main.c pistol.c player.c
+OBJECTS=obj/main.o obj/pistol.o obj/player.o
 
 BINARY_RELEASE=fps
 BINARY_DEBUG=fps-d

@@ -38,5 +38,6 @@ void pistol_terminate(Pistol *pistol);
 void pistol_reload(Pistol *pistol);
 void pistol_fire(Pistol *pistol, Vector3 *recoil_dir);
 void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const float rate);
+void pistol_update_anim_fire(Pistol *pistol, const float time_delta, const float rate);
 
 #endif
