@@ -25,6 +25,10 @@
 #define FIRE_FRAME_MAX		20
 #define RELOAD_FRAME_MAX	80
 #define PISTOL_MAX_PER_MAG	25
+#define ADS_LERP_SPEED		12.0f
+
+#define PLAYER_NORMAL_FOV	52.0f
+#define PLAYER_AIM_FOV		PLAYER_NORMAL_FOV / 2
 
 #define RAY_COUNT			8
 #define COLLISION_PUSHBACK	0.01f
@@ -43,6 +47,7 @@ int main() {
 	int screen_height = 0;
 	float frames_per_second;
 
+	Color crosshair_color;
 	Color ray_colors[RAY_COUNT] = {
 		RED,
 		ORANGE,
@@ -84,6 +89,8 @@ int main() {
 
 	Color pistol_color;
 	Vector3 pistol_pos;
+	Vector3 pistol_ads_pos;
+	Vector3 pistol_hip_pos;
 	Vector3 pistol_recoil_dir;
 	Model pistol_model;
 	ModelAnimation *pistol_anims;
@@ -139,6 +146,11 @@ int main() {
 	SetTargetFPS(frames_per_second);
 	SetMousePosition(screen_width / 2, screen_height / 2);
 
+	crosshair_color.r = 0xFF;
+	crosshair_color.g = 0xFF;
+	crosshair_color.b = 0xFF;
+	crosshair_color.a = 0xFF;
+
 	shader_lights = LoadShader("res/shaders/base_lighting_vert.glsl", "res/shaders/base_lighting_frag.glsl");
 	ambient_color_loc = GetShaderLocation(shader_lights, "ambient");
 	ambient_color[0] = 0x01;
@@ -152,7 +164,7 @@ int main() {
 
 	player_angle = Vector2Zero();
 	player_angle.x = -PI/2;
-	player.fovy = 52.0f;
+	player.fovy = PLAYER_NORMAL_FOV;
 	player.projection = CAMERA_PERSPECTIVE;
 	player.up = (Vector3){0.0f, 1.0f, 0.0f};
 	player.position = Vector3Scale(player.up, PLAYER_HEIGHT);
@@ -190,9 +202,15 @@ int main() {
 	pistol_color.b = 0x22;
 	pistol_color.a = 0xFF;
 
-	pistol_pos.x = -0.62f;
-	pistol_pos.y = -0.25f;
-	pistol_pos.z = -0.21f;
+	pistol_ads_pos.x = -0.62f;
+	pistol_ads_pos.y = -0.096f; 
+	pistol_ads_pos.z = 0.0f;
+
+	pistol_hip_pos.x = -0.62f;
+	pistol_hip_pos.y = -0.25f;
+	pistol_hip_pos.z = -0.21f;
+
+	pistol_pos = pistol_hip_pos;
 
 	pistol_model = LoadModel("res/models/weapons/pistol/pistol.iqm");
 	pistol_model.materials->shader = shader_lights;
@@ -291,22 +309,44 @@ int main() {
 		if(IsKeyPressed(KEY_R)
 		&& pistol_ammo_loaded < PISTOL_MAX_PER_MAG
 		&& pistol_reload_frame <= 0.0f) {
-			pistol_reload_frame = RELOAD_FRAME_MAX;
-			pistol_reload_sfx_play = 0;
-			const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
-			if(pistol_ammo_reserve - ammo_exchange >= 0) {
-				pistol_ammo_reserve -= ammo_exchange;
-				pistol_ammo_loaded += ammo_exchange;
+			if(pistol_ammo_reserve > 0) {
+				pistol_reload_frame = RELOAD_FRAME_MAX;
+				pistol_reload_sfx_play = 0;
+				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
+				if(pistol_ammo_reserve - ammo_exchange >= 0) {
+					pistol_ammo_reserve -= ammo_exchange;
+					pistol_ammo_loaded += ammo_exchange;
+				} else {
+					pistol_ammo_loaded += pistol_ammo_reserve;
+					pistol_ammo_reserve = 0;
+				}
 			} else {
-				pistol_ammo_loaded += pistol_ammo_reserve;
-				pistol_ammo_reserve = 0;
+				PlaySound(sfx_pistol_click);
 			}
 		}
+
+		float new_crosshair_opacity;
+		if(IsMouseButtonDown(MOUSE_RIGHT_BUTTON) && pistol_reload_frame <= 0.0f && !(is_running - 1)) {
+			pistol_pos = Vector3Lerp(pistol_pos, pistol_ads_pos, time_delta * ADS_LERP_SPEED);
+			player.fovy = Lerp(player.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
+			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_AIM_FOV, time_delta * ADS_LERP_SPEED);
+			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 0.0f, time_delta * ADS_LERP_SPEED);
+		} else {
+			pistol_pos = Vector3Lerp(pistol_pos, pistol_hip_pos, time_delta * ADS_LERP_SPEED);
+			player.fovy = Lerp(player.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
+			cam_view_model.fovy = Lerp(cam_view_model.fovy, PLAYER_NORMAL_FOV, time_delta * ADS_LERP_SPEED);
+			new_crosshair_opacity = Lerp((float)crosshair_color.a / 255, 1.0f, time_delta * ADS_LERP_SPEED);
+		}
+		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
 		&& pistol_fire_frame <= FIRE_FRAME_MAX * 0.6f
 		&& pistol_reload_frame <= 0.0f) {
 			if(pistol_ammo_loaded > 0) {
+				Ray gun_ray;
+				RayCollision gun_ray_collision;
+
+				/* play bullet fire sound */
 				SetSoundPitch(sfx_pistol_fire,
 						1.0f + ((float)GetRandomValue(-1, 1) / 32));
 				PlaySound(sfx_pistol_fire);
@@ -320,16 +360,23 @@ int main() {
 				Vector3Scale(pistol_recoil_dir, 0.004f);
 
 				pistol_ammo_loaded--;
+
+				/* play ricochete against wall */
+				
 			} else {
-				pistol_reload_frame = RELOAD_FRAME_MAX;
-				pistol_reload_sfx_play = 0;
-				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
-				if(pistol_ammo_reserve - ammo_exchange >= 0) {
-					pistol_ammo_reserve -= ammo_exchange;
-					pistol_ammo_loaded += ammo_exchange;
+				if(pistol_ammo_reserve > 0) {
+					pistol_reload_frame = RELOAD_FRAME_MAX;
+					pistol_reload_sfx_play = 0;
+					const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol_ammo_loaded;
+					if(pistol_ammo_reserve - ammo_exchange >= 0) {
+						pistol_ammo_reserve -= ammo_exchange;
+						pistol_ammo_loaded += ammo_exchange;
+					} else {
+						pistol_ammo_loaded += pistol_ammo_reserve;
+						pistol_ammo_reserve = 0;
+					}
 				} else {
-					pistol_ammo_loaded += pistol_ammo_reserve;
-					pistol_ammo_reserve = 0;
+					PlaySound(sfx_pistol_click);
 				}
 			}
 		}
@@ -542,7 +589,7 @@ int main() {
 		BeginDrawing(); {
 			DrawTextureRec(render_texture.texture, render_rect, Vector2Zero(), WHITE);
 			if(view_toggle) {
-				DrawCircle(screen_width / 2, screen_height / 2, 1.0f, WHITE);
+				DrawCircle(screen_width / 2, screen_height / 2, 1.0f, crosshair_color); /* crosshair */
 				DrawTextureRec(view_model_render.texture, render_rect, Vector2Zero(), WHITE);
 			}
 
