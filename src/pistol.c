@@ -1,6 +1,6 @@
 #include "pistol.h"
 
-void pistol_initialize(Pistol *pistol, const Shader shader) {
+void pistol_initialize(Pistol *pistol, const LightShader light_shader) {
 	pistol->anim_count = 2;
 	pistol->fire_frame = 0.0f;
 	pistol->reload_frame = 0.0f;
@@ -22,7 +22,7 @@ void pistol_initialize(Pistol *pistol, const Shader shader) {
 	pistol->pos = pistol->hip_pos;
 
 	pistol->model = LoadModel("res/models/weapons/pistol/pistol.iqm");
-	pistol->model.materials->shader = shader;
+	pistol->model.materials->shader = light_shader.shader;
 	pistol->model.materials->maps->color = pistol->color;
 	pistol->anims = LoadModelAnimations("res/models/weapons/pistol/pistol.iqm", &pistol->anim_count);
 	pistol->model.transform = MatrixMultiply(pistol->model.transform, MatrixRotateX(PI/2));
@@ -60,11 +60,11 @@ void pistol_reload(Pistol *pistol) {
 }
 
 void pistol_fire(Pistol *pistol, Vector3 *recoil_dir) {
-	/* play bullet fire sound */
 	SetSoundPitch(pistol->sfx_fire,
 			1.0f + ((float)GetRandomValue(-1, 1) / 32));
 	PlaySound(pistol->sfx_fire);
 	pistol->fire_frame = PISTOL_FIRE_FRAMES;
+	pistol->ammo_loaded--;
 
 	*recoil_dir = (Vector3) {
 		(float)GetRandomValue(-1, 1),
@@ -72,8 +72,6 @@ void pistol_fire(Pistol *pistol, Vector3 *recoil_dir) {
 		(float)GetRandomValue(-1, 1),
 	};
 	*recoil_dir = Vector3Scale(*recoil_dir, 0.004f);
-
-	pistol->ammo_loaded--;
 }
 
 void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const float rate) {

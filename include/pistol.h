@@ -7,8 +7,7 @@
 #define PISTOL_ADS_LERP_SPEED	12.0f
 #define ANIM_FRAMERATE		60.0f
 
-#include <raylib.h>
-#include <raymath.h>
+#include "light_shader.h"
 
 typedef struct {
 	Color color;
@@ -33,7 +32,7 @@ typedef struct {
 	Sound sfx_load;
 } Pistol;
 
-void pistol_initialize(Pistol *pistol, const Shader shader);
+void pistol_initialize(Pistol *pistol, const LightShader light_shader);
 void pistol_terminate(Pistol *pistol);
 void pistol_reload(Pistol *pistol);
 void pistol_fire(Pistol *pistol, Vector3 *recoil_dir);

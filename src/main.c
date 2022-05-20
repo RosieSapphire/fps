@@ -49,14 +49,9 @@ int main() {
 	bool hide_toggle = 0;
 	bool show_empty_room = 0;
 	
-	Shader shader_lights;
-	int ambient_color_loc;
-	float ambient_color[4];
-
-	int view_pos_loc;
-	float view_pos[3];
-	int view_tar_loc;
-	float view_tar[3];
+	LightShader light_shader;
+	Vector3 light_pos;
+	Light light;
 
 	Player player;
 	Pistol pistol;
@@ -78,9 +73,6 @@ int main() {
 
 	RenderTexture2D render_texture;
 	Rectangle render_rect;
-
-	Vector3 light_pos;
-	Light light;
 
 	Vector2 mouse_pos;
 
@@ -109,17 +101,7 @@ int main() {
 	crosshair_color.b = 0xFF;
 	crosshair_color.a = 0xFF;
 
-	shader_lights = LoadShader("res/shaders/base_lighting_vert.glsl", "res/shaders/base_lighting_frag.glsl");
-	ambient_color_loc = GetShaderLocation(shader_lights, "ambient");
-	ambient_color[0] = 0x01;
-	ambient_color[1] = 0x01;
-	ambient_color[2] = 0x01;
-	ambient_color[3] = 0xFF;
-	SetShaderValue(shader_lights, ambient_color_loc, &ambient_color, SHADER_UNIFORM_VEC4);
-
-	view_pos_loc = GetShaderLocation(shader_lights, "viewPos");
-	view_tar_loc = GetShaderLocation(shader_lights, "viewTar");
-
+	light_shader_initialize(&light_shader, "res/shaders/base_lighting_vert.glsl", "res/shaders/base_lighting_frag.glsl");
 	player_initialize(&player, screen_width, screen_height);
 	
 	viewport.fovy = 8.0f;
@@ -136,12 +118,12 @@ int main() {
 	SetMaterialTexture(&room_model_full.materials[0], MATERIAL_MAP_DIFFUSE, tex_room_ceiling);
 	SetMaterialTexture(&room_model_full.materials[1], MATERIAL_MAP_DIFFUSE, tex_room_floor);
 	SetMaterialTexture(&room_model_full.materials[2], MATERIAL_MAP_DIFFUSE, tex_room_wall);
-	room_model_full.materials[0].shader = shader_lights;
-	room_model_full.materials[1].shader = shader_lights;
-	room_model_full.materials[2].shader = shader_lights;
+	room_model_full.materials[0].shader = light_shader.shader;
+	room_model_full.materials[1].shader = light_shader.shader;
+	room_model_full.materials[2].shader = light_shader.shader;
 
 	room_model_empty = LoadModel("res/models/room/room-empty.obj");
-	room_model_empty.materials->shader = shader_lights;
+	room_model_empty.materials->shader = light_shader.shader;
 
 	ammo_text_pos[X] = screen_width / 64;
 	ammo_text_pos[S] = screen_height / 32;
@@ -174,12 +156,12 @@ int main() {
 	sfx_bullet_bounce[3] = LoadSound("res/sounds/ricoche-04.wav");
 	sfx_bullet_bounce[4] = LoadSound("res/sounds/ricoche-05.wav");
 
-	pistol_initialize(&pistol, shader_lights);
+	pistol_initialize(&pistol, light_shader);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
-	light = CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
+	light = CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, light_shader.shader);
 	light.color = WHITE;
-	UpdateLightValues(shader_lights, light);
+	UpdateLightValues(light_shader.shader, light);
 
 	while(!WindowShouldClose()) {
 		const int is_running = IsKeyDown(KEY_LEFT_SHIFT) + 1;
@@ -274,15 +256,7 @@ int main() {
 		}
 
 		/* updating */
-		view_pos[0] = player.cam_view.position.x;
-		view_pos[1] = player.cam_view.position.y;
-		view_pos[2] = player.cam_view.position.z;
-		SetShaderValue(shader_lights, view_pos_loc, &view_pos, SHADER_UNIFORM_VEC3);
-
-		view_tar[0] = player.cam_view.target.x;
-		view_tar[1] = player.cam_view.target.y;
-		view_tar[2] = player.cam_view.target.z;
-		SetShaderValue(shader_lights, view_tar_loc, &view_tar, SHADER_UNIFORM_VEC3);
+		light_shader_update_uniforms(&light_shader, player.cam_view.position, player.cam_view.target);
 
 		recoil_dir = Vector3Lerp(recoil_dir, Vector3Zero(), time_delta * PISTOL_ADS_LERP_SPEED);
 
