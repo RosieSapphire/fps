@@ -261,22 +261,13 @@ int main() {
 			viewport.target = (Vector3){0.0f, 0.0f, 0.01f};
 		}
 
-		if(IsKeyPressed(KEY_R)
-		&& pistol.ammo_loaded < PISTOL_MAX_PER_MAG
-		&& pistol.reload_frame <= 0.0f) {
-			if(pistol.ammo_reserve > 0) {
-				pistol.reload_frame = PISTOL_RELOAD_FRAMES;
-				pistol.reload_sfx_play = 0;
-				const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
-				if(pistol.ammo_reserve - ammo_exchange >= 0) {
-					pistol.ammo_reserve -= ammo_exchange;
-					pistol.ammo_loaded += ammo_exchange;
+		if(IsKeyPressed(KEY_R)) {
+			if(pistol.ammo_loaded < PISTOL_MAX_PER_MAG && pistol.reload_frame <= 0.0f) {
+				if(pistol.ammo_reserve > 0) {
+					pistol_reload(&pistol);
 				} else {
-					pistol.ammo_loaded += pistol.ammo_reserve;
-					pistol.ammo_reserve = 0;
+					PlaySound(pistol.sfx_click);
 				}
-			} else {
-				PlaySound(pistol.sfx_click);
 			}
 		}
 
@@ -294,56 +285,33 @@ int main() {
 		}
 		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
 
-		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
-		&& pistol.fire_frame <= PISTOL_FIRE_FRAMES * 0.75f
-		&& pistol.reload_frame <= 0.0f) {
-			if(pistol.ammo_loaded > 0) {
-				Ray gun_ray;
-				RayCollision gun_ray_collision;
-				float bullet_ricochet_volume;
-				int last_bullet_sfx_play = bullet_ricochet_play;
+		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) {
+			if(pistol.fire_frame <= PISTOL_FIRE_FRAMES * 0.75f
+			&& pistol.reload_frame <= 0.0f) {
+				if(pistol.ammo_loaded > 0) {
+					Ray gun_ray;
+					RayCollision gun_ray_collision;
+					float bullet_ricochet_volume;
+					int last_bullet_sfx_play = bullet_ricochet_play;
 
-				/* play bullet fire sound */
-				SetSoundPitch(pistol.sfx_fire,
-						1.0f + ((float)GetRandomValue(-1, 1) / 32));
-				PlaySound(pistol.sfx_fire);
-				pistol.fire_frame = PISTOL_FIRE_FRAMES;
+					pistol_fire(&pistol, &recoil_dir);
 
-				recoil_dir = (Vector3) {
-					(float)GetRandomValue(-1, 1),
-					(float)GetRandomValue(2, 4),
-					(float)GetRandomValue(-1, 1),
-				};
-				recoil_dir = Vector3Scale(recoil_dir, 0.004f);
+					do { bullet_ricochet_play = GetRandomValue(0, 4);
+					} while(bullet_ricochet_play == last_bullet_sfx_play);
 
-				pistol.ammo_loaded--;
-
-				/* play ricochete against wall */
-				do {
-					bullet_ricochet_play = GetRandomValue(0, 4);
-				} while(bullet_ricochet_play == last_bullet_sfx_play);
-
-				gun_ray.position = player_raw_pos;
-				gun_ray.direction = Vector3Subtract(player.target, player.position);
-				gun_ray_collision = GetRayCollisionModel(gun_ray, room_model_full);
-				bullet_ricochet_volume = 1 / Vector3Distance(player.position, gun_ray_collision.point);
-				bullet_ricochet_volume = Clamp(bullet_ricochet_volume, 0.0f, 1.0f);
-				SetSoundVolume(sfx_bullet_bounce[bullet_ricochet_play], bullet_ricochet_volume);
-				PlaySound(sfx_bullet_bounce[bullet_ricochet_play]);
-			} else {
-				if(pistol.ammo_reserve > 0) {
-					pistol.reload_frame = PISTOL_RELOAD_FRAMES;
-					pistol.reload_sfx_play = 0;
-					const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol.ammo_loaded;
-					if(pistol.ammo_reserve - ammo_exchange >= 0) {
-						pistol.ammo_reserve -= ammo_exchange;
-						pistol.ammo_loaded += ammo_exchange;
-					} else {
-						pistol.ammo_loaded += pistol.ammo_reserve;
-						pistol.ammo_reserve = 0;
-					}
+					gun_ray.position = player_raw_pos;
+					gun_ray.direction = Vector3Subtract(player.target, player.position);
+					gun_ray_collision = GetRayCollisionModel(gun_ray, room_model_full);
+					bullet_ricochet_volume = 1 / Vector3Distance(player.position, gun_ray_collision.point);
+					bullet_ricochet_volume = Clamp(bullet_ricochet_volume, 0.0f, 1.0f);
+					SetSoundVolume(sfx_bullet_bounce[bullet_ricochet_play], bullet_ricochet_volume);
+					PlaySound(sfx_bullet_bounce[bullet_ricochet_play]);
 				} else {
-					PlaySound(pistol.sfx_click);
+					if(pistol.ammo_reserve > 0) {
+						pistol_reload(&pistol);
+					} else {
+						PlaySound(pistol.sfx_click);
+					}
 				}
 			}
 		}

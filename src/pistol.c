@@ -45,3 +45,33 @@ void pistol_terminate(Pistol *pistol) {
 	UnloadSound(pistol->sfx_eject);
 	UnloadSound(pistol->sfx_load);
 }
+
+void pistol_reload(Pistol *pistol) {
+	pistol->reload_frame = PISTOL_RELOAD_FRAMES;
+	pistol->reload_sfx_play = 0;
+	const int ammo_exchange = PISTOL_MAX_PER_MAG - pistol->ammo_loaded;
+	if(pistol->ammo_reserve - ammo_exchange >= 0) {
+		pistol->ammo_reserve -= ammo_exchange;
+		pistol->ammo_loaded += ammo_exchange;
+	} else {
+		pistol->ammo_loaded += pistol->ammo_reserve;
+		pistol->ammo_reserve = 0;
+	}
+}
+
+void pistol_fire(Pistol *pistol, Vector3 *recoil_dir) {
+	/* play bullet fire sound */
+	SetSoundPitch(pistol->sfx_fire,
+			1.0f + ((float)GetRandomValue(-1, 1) / 32));
+	PlaySound(pistol->sfx_fire);
+	pistol->fire_frame = PISTOL_FIRE_FRAMES;
+
+	*recoil_dir = (Vector3) {
+		(float)GetRandomValue(-1, 1),
+		(float)GetRandomValue(2, 4),
+		(float)GetRandomValue(-1, 1),
+	};
+	*recoil_dir = Vector3Scale(*recoil_dir, 0.004f);
+
+	pistol->ammo_loaded--;
+}
