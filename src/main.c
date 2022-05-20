@@ -30,8 +30,6 @@
 #define SFX_FOOTSTEP_COUNT	10
 #define SFX_BULLET_COUNT	5
 
-#define ANIM_FRAMERATE		60.0f
-
 #define X 0
 #define Y 1
 #define S 2
@@ -332,24 +330,8 @@ int main() {
 		pistol.fire_frame -= time_delta * ANIM_FRAMERATE;
 		pistol.fire_frame = Clamp(pistol.fire_frame, 0.0f, PISTOL_FIRE_FRAMES);
 
-		UpdateModelAnimation(pistol.model, pistol.anims[1],
-				PISTOL_FIRE_FRAMES - (int)pistol.fire_frame);
-
-		/* TODO: add Scout's reload as a 1/100 chance every time you reload */
-		pistol.reload_frame -= time_delta * ANIM_FRAMERATE;
-		pistol.reload_frame = Clamp(pistol.reload_frame, 0.0f, PISTOL_RELOAD_FRAMES);
-		if(pistol.reload_frame > 0.0f) {
-			if(pistol.reload_frame < 64 && pistol.reload_sfx_play < 1) {
-				PlaySound(pistol.sfx_eject);
-				pistol.reload_sfx_play++;
-			} else if(pistol.reload_frame < 40 && pistol.reload_sfx_play < 2) {
-				PlaySound(pistol.sfx_load);
-				pistol.reload_sfx_play++;
-			}
-
-			UpdateModelAnimation(pistol.model,
-					pistol.anims[2], PISTOL_RELOAD_FRAMES - (int)pistol.reload_frame);
-		}
+		UpdateModelAnimation(pistol.model, pistol.anims[1], PISTOL_FIRE_FRAMES - (int)pistol.fire_frame);
+		pistol_update_anim_reload(&pistol, time_delta, ANIM_FRAMERATE);
 
 		Vector2 player_angle_delta;
 		player_angle_delta.x = (mouse_pos.x - ((float)screen_width / 2)) * TURN_SPEED;

@@ -75,3 +75,21 @@ void pistol_fire(Pistol *pistol, Vector3 *recoil_dir) {
 
 	pistol->ammo_loaded--;
 }
+
+void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const float rate) {
+	/* TODO: add Scout's reload as a 1/100 chance every time you reload */
+	pistol->reload_frame -= time_delta * rate;
+	pistol->reload_frame = Clamp(pistol->reload_frame, 0.0f, PISTOL_RELOAD_FRAMES);
+	if(pistol->reload_frame > 0.0f) {
+		if(pistol->reload_frame < 64 && pistol->reload_sfx_play < 1) {
+			PlaySound(pistol->sfx_eject);
+			pistol->reload_sfx_play++;
+		} else if(pistol->reload_frame < 40 && pistol->reload_sfx_play < 2) {
+			PlaySound(pistol->sfx_load);
+			pistol->reload_sfx_play++;
+		}
+
+		UpdateModelAnimation(pistol->model,
+				pistol->anims[2], PISTOL_RELOAD_FRAMES - (int)pistol->reload_frame);
+	}
+}

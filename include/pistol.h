@@ -5,6 +5,7 @@
 #define PISTOL_RELOAD_FRAMES	80
 #define PISTOL_MAX_PER_MAG		25
 #define PISTOL_ADS_LERP_SPEED	12.0f
+#define ANIM_FRAMERATE		60.0f
 
 #include <raylib.h>
 #include <raymath.h>
@@ -36,5 +37,6 @@ void pistol_initialize(Pistol *pistol, const Shader shader);
 void pistol_terminate(Pistol *pistol);
 void pistol_reload(Pistol *pistol);
 void pistol_fire(Pistol *pistol, Vector3 *recoil_dir);
+void pistol_update_anim_reload(Pistol *pistol, const float time_delta, const float rate);
 
 #endif
