@@ -22,7 +22,7 @@
 #define HEADBOB_SCALE		0.04f
 #define HEADBOB_SPEED		250.0f
 
-#define FIRE_FRAME_MAX		20
+#define FIRE_FRAME_MAX		30
 #define RELOAD_FRAME_MAX	80
 #define PISTOL_MAX_PER_MAG	25
 #define ADS_LERP_SPEED		12.0f
@@ -34,6 +34,7 @@
 #define COLLISION_PUSHBACK	0.01f
 
 #define SFX_FOOTSTEP_COUNT	10
+#define SFX_BULLET_COUNT	5
 
 #define ANIM_FRAMERATE		60.0f
 
@@ -98,6 +99,7 @@ int main() {
 	float pistol_fire_frame = 0.0f;
 	float pistol_reload_frame = 0.0f;
 	int pistol_reload_sfx_play = 0;
+
 	int pistol_ammo_loaded = PISTOL_MAX_PER_MAG;
 	int pistol_ammo_reserve = 50;
 	int pistol_ammo_text_pos[3];
@@ -120,6 +122,8 @@ int main() {
 	Vector3 player_raw_target;
 
 	Sound sfx_footsteps[SFX_FOOTSTEP_COUNT];
+	Sound sfx_bullet_bounce[SFX_BULLET_COUNT];
+	int bullet_ricochet_play = 0;
 	bool footstep_played = 0;
 
 	Sound sfx_pistol_fire;
@@ -127,7 +131,6 @@ int main() {
 	Sound sfx_pistol_eject;
 	Sound sfx_pistol_load;
 
-	printf("%d, %d\n", screen_width, screen_height);
 	InitWindow(screen_width, screen_height, SCREEN_LABEL);
 	monitor = GetCurrentMonitor();
 	screen_width = GetMonitorWidth(monitor);
@@ -139,6 +142,7 @@ int main() {
 	pistol_ammo_text_pos[Y] = screen_height - 32 - pistol_ammo_text_pos[S];
 
 	InitAudioDevice();
+	SetMasterVolume(0.5f);
 	SetRandomSeed((unsigned int)time(0));
 	HideCursor();
 
@@ -238,18 +242,24 @@ int main() {
 	sfx_footsteps[8] = LoadSound("res/sounds/footstep-09.wav");
 	sfx_footsteps[9] = LoadSound("res/sounds/footstep-10.wav");
 
+	sfx_bullet_bounce[0] = LoadSound("res/sounds/ricoche-01.wav");
+	sfx_bullet_bounce[1] = LoadSound("res/sounds/ricoche-02.wav");
+	sfx_bullet_bounce[2] = LoadSound("res/sounds/ricoche-03.wav");
+	sfx_bullet_bounce[3] = LoadSound("res/sounds/ricoche-04.wav");
+	sfx_bullet_bounce[4] = LoadSound("res/sounds/ricoche-05.wav");
+
 	/* load pistol sfx */
 	sfx_pistol_fire = LoadSound("res/sounds/pistol-fire.wav");
-	SetSoundVolume(sfx_pistol_fire, 0.45f);
+	SetSoundVolume(sfx_pistol_fire, 0.7f);
 
 	sfx_pistol_click = LoadSound("res/sounds/pistol-click.wav");
 	SetSoundVolume(sfx_pistol_click, 0.45f);
 
 	sfx_pistol_eject = LoadSound("res/sounds/pistol-eject.wav");
-	SetSoundVolume(sfx_pistol_eject, 0.13f);
+	SetSoundVolume(sfx_pistol_eject, 0.18f);
 
 	sfx_pistol_load = LoadSound("res/sounds/pistol-load.wav");
-	SetSoundVolume(sfx_pistol_load, 0.48f);
+	SetSoundVolume(sfx_pistol_load, 0.62f);
 
 	light_pos = (Vector3){2.0f, 8.0f, 2.0f};
 	light = CreateLight(LIGHT_POINT, light_pos, Vector3Zero(), WHITE, shader_lights);
@@ -340,11 +350,13 @@ int main() {
 		crosshair_color.a = (int)(new_crosshair_opacity * 255.0f);
 
 		if(IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
-		&& pistol_fire_frame <= FIRE_FRAME_MAX * 0.6f
+		&& pistol_fire_frame <= FIRE_FRAME_MAX * 0.75f
 		&& pistol_reload_frame <= 0.0f) {
 			if(pistol_ammo_loaded > 0) {
 				Ray gun_ray;
 				RayCollision gun_ray_collision;
+				float bullet_ricochet_volume;
+				int last_bullet_sfx_play = bullet_ricochet_play;
 
 				/* play bullet fire sound */
 				SetSoundPitch(sfx_pistol_fire,
@@ -357,12 +369,22 @@ int main() {
 					(float)GetRandomValue(2, 4),
 					(float)GetRandomValue(-1, 1),
 				};
-				Vector3Scale(pistol_recoil_dir, 0.004f);
+				pistol_recoil_dir = Vector3Scale(pistol_recoil_dir, 0.004f);
 
 				pistol_ammo_loaded--;
 
 				/* play ricochete against wall */
-				
+				do {
+					bullet_ricochet_play = GetRandomValue(0, 4);
+				} while(bullet_ricochet_play == last_bullet_sfx_play);
+
+				gun_ray.position = player_raw_pos;
+				gun_ray.direction = Vector3Subtract(player.target, player.position);
+				gun_ray_collision = GetRayCollisionModel(gun_ray, room_model_full);
+				bullet_ricochet_volume = 1 / Vector3Distance(player.position, gun_ray_collision.point);
+				bullet_ricochet_volume = Clamp(bullet_ricochet_volume, 0.0f, 1.0f);
+				SetSoundVolume(sfx_bullet_bounce[bullet_ricochet_play], bullet_ricochet_volume);
+				PlaySound(sfx_bullet_bounce[bullet_ricochet_play]);
 			} else {
 				if(pistol_ammo_reserve > 0) {
 					pistol_reload_frame = RELOAD_FRAME_MAX;
@@ -392,6 +414,8 @@ int main() {
 		view_tar[2] = player.target.z;
 		SetShaderValue(shader_lights, view_tar_loc, &view_tar, SHADER_UNIFORM_VEC3);
 
+		pistol_recoil_dir = Vector3Lerp(pistol_recoil_dir, Vector3Zero(), time_delta * ADS_LERP_SPEED);
+
 		pistol_fire_frame -= time_delta * ANIM_FRAMERATE;
 		pistol_fire_frame = Clamp(pistol_fire_frame, 0.0f, FIRE_FRAME_MAX);
 
@@ -417,18 +441,8 @@ int main() {
 		Vector2 player_angle_delta;
 		player_angle_delta.x = (mouse_pos.x - ((float)screen_width / 2)) * TURN_SPEED;
 		player_angle_delta.y = -((mouse_pos.y - ((float)screen_height / 2)) * TURN_SPEED);
-
-		if(player_angle.y + player_angle_delta.y > 1.0f) {
-			player_angle_delta.y = 1.0f - player_angle.y;
-			player_angle.y = 1.0f;
-		}
-
-		if(player_angle.y + player_angle_delta.y < -1.0f) {
-			player_angle_delta.y = -1.0f - player_angle.y;
-			player_angle.y = -1.0f;
-		}
-
 		player_angle = Vector2Add(player_angle, player_angle_delta);
+		player_angle.y = Clamp(player_angle.y, -1.0f, 1.0f);
 
 		move_direction.x = cos_player_angle_x * move_input.y;
 		move_direction.x += -sin_player_angle_x * move_input.x;
@@ -500,9 +514,7 @@ int main() {
 		player_raw_target = Vector3Multiply(player_raw_target, (Vector3){PLAYER_RADIUS, PLAYER_RADIUS, PLAYER_RADIUS});
 		player_raw_target = Vector3Add(player_raw_target, player_raw_pos);
 		player.target = Vector3Add(player_raw_target, headbob);
-		player.target = Vector3Add(player.target, Vector3Scale(pistol_recoil_dir,
-					Clamp((pistol_fire_frame * 0.0005f) - 0.0064f, 0.0f,
-						FIRE_FRAME_MAX)));
+		player.target = Vector3Add(player.target, pistol_recoil_dir);
 		player.position = Vector3Add(player_raw_pos, headbob);
 
 		/* 3rd-person camera controls */
@@ -613,8 +625,15 @@ int main() {
 	UnloadModel(sphere_model);
 
 	/* unloading sounds */
-	const Sound* cur = sfx_footsteps;
-	const Sound* const end = sfx_footsteps + SFX_FOOTSTEP_COUNT;
+	const Sound *cur = sfx_footsteps;
+	const Sound *end = cur + SFX_FOOTSTEP_COUNT;
+	while(cur != end) {
+		UnloadSound(*cur);
+		cur++;
+	}
+
+	cur = sfx_bullet_bounce;
+	end = cur + SFX_BULLET_COUNT;
 	while(cur != end) {
 		UnloadSound(*cur);
 		cur++;
